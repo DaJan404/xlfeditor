@@ -335,7 +335,22 @@ class XlfEditorProvider {
                         margin-bottom: 8px;
                     }
                     .source-text {
-                        line-height: 1.4;
+                        line-height: 1.6;
+                        margin-bottom: 12px;
+                        font-size: 14px;
+                    }
+                    .notes {
+                        margin-top: 8px;
+                        font-size: 13px;
+                        color: var(--vscode-textPreformat-foreground);
+                    }
+                    .note-item {
+                        margin: 4px 0;
+                        padding: 4px 0;
+                    }
+                    .note-from {
+                        font-weight: 500;
+                        color: var(--vscode-textLink-foreground);
                     }
                     textarea {
                         width: 100%;
@@ -450,7 +465,15 @@ class XlfEditorProvider {
                                         <div class="source-text">\${escapeHtml(unit.source)}</div>
                                         \${unit.notes?.length > 0 ? \`
                                             <div class="notes">
-                                                \${unit.notes.map(n => \`\${escapeHtml(n.from)}: \${escapeHtml(n.content || '')}\`).join('<br>')}
+                                                \${unit.notes.map(n => {
+                                                    if (n.from === 'Developer' || n.from === 'Xliff Generator') {
+                                                        return \`<div class="note-item">
+                                                            <span class="note-from">\${escapeHtml(n.from)}:</span> 
+                                                            \${escapeHtml(n.content || '')}
+                                                        </div>\`;
+                                                    }
+                                                    return '';
+                                                }).filter(Boolean).join('')}
                                             </div>
                                         \` : ''}
                                     </div>
