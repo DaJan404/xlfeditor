@@ -1,0 +1,56 @@
+{
+  "name": "xlf-editor",
+  "displayName": "XLF Editor",
+  "description": "Editor for XLF translation files in Business Central",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.97.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "xlf-editor.openXlf",
+        "title": "Open XLF File",
+        "category": "XLF Editor"
+      }
+    ],
+    "customEditors": [{
+      "viewType": "xlf-editor.translator",
+      "displayName": "XLF Translator",
+      "selector": [
+        {
+          "filenamePattern": "*.xlf"
+        }
+      ],
+      "priority": "default"
+    }]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.97.0",
+    "@types/xml2js": "^0.4.14",
+    "@typescript-eslint/eslint-plugin": "^8.22.0",
+    "@typescript-eslint/parser": "^8.22.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.19.0",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "xml2js": "^0.6.2"
+  }
+}
