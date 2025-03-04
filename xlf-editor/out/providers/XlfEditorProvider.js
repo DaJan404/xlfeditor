@@ -40,26 +40,37 @@ const XlfParser_1 = require("../utils/XlfParser");
 const XlfUpdater_1 = require("../utils/XlfUpdater");
 class XlfEditorProvider {
     context;
+    static instance;
     static viewType = 'xlf-editor.translator';
     updating = false;
     hasUnsavedChanges = false;
     webviewPanel;
     xliffParser;
     xliffUpdater;
+    // Singleton pattern
     constructor(context) {
         this.context = context;
         this.xliffParser = new XlfParser_1.XliffParser();
         this.xliffUpdater = new XlfUpdater_1.XliffUpdater();
     }
+    static getInstance(context) {
+        if (!XlfEditorProvider.instance) {
+            XlfEditorProvider.instance = new XlfEditorProvider(context);
+        }
+        return XlfEditorProvider.instance;
+    }
     static register(context) {
-        return vscode.window.registerCustomEditorProvider(XlfEditorProvider.viewType, new XlfEditorProvider(context));
+        return vscode.window.registerCustomEditorProvider(XlfEditorProvider.viewType, XlfEditorProvider.getInstance(context));
     }
     async resolveCustomTextEditor(document, webviewPanel, _token) {
         this.webviewPanel = webviewPanel;
-        webviewPanel.webview.options = { enableScripts: true };
-        webviewPanel.webview.html = (0, WebviewContent_1.getWebviewContent)();
+        this.initializeWebview(webviewPanel);
         await this.updateWebview(webviewPanel.webview, document);
         this.setupMessageHandlers(webviewPanel, document);
+    }
+    initializeWebview(webviewPanel) {
+        webviewPanel.webview.options = { enableScripts: true };
+        webviewPanel.webview.html = (0, WebviewContent_1.getWebviewContent)();
     }
     setupMessageHandlers(webviewPanel, document) {
         webviewPanel.webview.onDidReceiveMessage(async (e) => {

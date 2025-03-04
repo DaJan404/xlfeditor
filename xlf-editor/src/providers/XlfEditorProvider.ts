@@ -4,22 +4,31 @@ import { XliffParser } from '../utils/XlfParser';
 import { XliffUpdater } from '../utils/XlfUpdater';
 
 export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
+    private static instance: XlfEditorProvider;
     private static readonly viewType = 'xlf-editor.translator';
     private updating = false;
     private hasUnsavedChanges = false;
     private webviewPanel?: vscode.WebviewPanel;
-    private xliffParser: XliffParser;
-    private xliffUpdater: XliffUpdater;
+    private readonly xliffParser: XliffParser;
+    private readonly xliffUpdater: XliffUpdater;
 
-    constructor(private readonly context: vscode.ExtensionContext) {
+    // Singleton pattern
+    private constructor(private readonly context: vscode.ExtensionContext) {
         this.xliffParser = new XliffParser();
         this.xliffUpdater = new XliffUpdater();
+    }
+
+    public static getInstance(context: vscode.ExtensionContext): XlfEditorProvider {
+        if (!XlfEditorProvider.instance) {
+            XlfEditorProvider.instance = new XlfEditorProvider(context);
+        }
+        return XlfEditorProvider.instance;
     }
 
     public static register(context: vscode.ExtensionContext): vscode.Disposable {
         return vscode.window.registerCustomEditorProvider(
             XlfEditorProvider.viewType,
-            new XlfEditorProvider(context)
+            XlfEditorProvider.getInstance(context)
         );
     }
 
@@ -29,11 +38,14 @@ export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
         _token: vscode.CancellationToken
     ): Promise<void> {
         this.webviewPanel = webviewPanel;
-        webviewPanel.webview.options = { enableScripts: true };
-        webviewPanel.webview.html = getWebviewContent();
-
+        this.initializeWebview(webviewPanel);
         await this.updateWebview(webviewPanel.webview, document);
         this.setupMessageHandlers(webviewPanel, document);
+    }
+
+    private initializeWebview(webviewPanel: vscode.WebviewPanel): void {
+        webviewPanel.webview.options = { enableScripts: true };
+        webviewPanel.webview.html = getWebviewContent();
     }
 
     private setupMessageHandlers(webviewPanel: vscode.WebviewPanel, document: vscode.TextDocument): void {
@@ -73,7 +85,9 @@ export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
             webview.postMessage({ type: 'update', content });
         } catch (error) {
             console.error('Error updating webview:', error);
-            vscode.window.showErrorMessage(`Failed to parse XLF document: ${error instanceof Error ? error.message : String(error)}`);
+            vscode.window.showErrorMessage(
+                `Failed to parse XLF document: ${error instanceof Error ? error.message : String(error)}`
+            );
         }
     }
 }
