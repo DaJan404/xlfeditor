@@ -1,21 +1,17 @@
 import * as vscode from 'vscode';
-import { getWebviewContent } from '../view/WebviewContent';
-import { XliffParser } from '../utils/XlfParser';
-import { XliffUpdater } from '../utils/XlfUpdater';
+import { WebView } from '../view/WebviewContent';
+import { XliffController } from '../controllers/XlfController';
 
 export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
     private static instance: XlfEditorProvider;
     private static readonly viewType = 'xlf-editor.translator';
-    private updating = false;
-    private hasUnsavedChanges = false;
     private webviewPanel?: vscode.WebviewPanel;
-    private readonly xliffParser: XliffParser;
-    private readonly xliffUpdater: XliffUpdater;
+    private readonly xliffController: XliffController;
+    private readonly webView: WebView;
 
-    // Singleton pattern
     private constructor(private readonly context: vscode.ExtensionContext) {
-        this.xliffParser = new XliffParser();
-        this.xliffUpdater = new XliffUpdater();
+        this.xliffController = XliffController.getInstance();
+        this.webView = WebView.getInstance();
     }
 
     public static getInstance(context: vscode.ExtensionContext): XlfEditorProvider {
@@ -38,56 +34,29 @@ export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
         _token: vscode.CancellationToken
     ): Promise<void> {
         this.webviewPanel = webviewPanel;
-        this.initializeWebview(webviewPanel);
-        await this.updateWebview(webviewPanel.webview, document);
+        this.webView.initialize(webviewPanel);
+        await this.xliffController.updateWebview(webviewPanel.webview, document);
         this.setupMessageHandlers(webviewPanel, document);
-    }
-
-    private initializeWebview(webviewPanel: vscode.WebviewPanel): void {
-        webviewPanel.webview.options = { enableScripts: true };
-        webviewPanel.webview.html = getWebviewContent();
     }
 
     private setupMessageHandlers(webviewPanel: vscode.WebviewPanel, document: vscode.TextDocument): void {
         webviewPanel.webview.onDidReceiveMessage(async e => {
             switch (e.type) {
                 case 'update':
-                    if (!this.updating) {
-                        this.updating = true;
-                        try {
-                            if (Array.isArray(e.changes)) {
-                                await this.xliffUpdater.updateTranslations(document, e.changes);
-                                webviewPanel.dispose();
-                            }
-                        } finally {
-                            this.updating = false;
-                        }
+                    if (Array.isArray(e.changes)) {
+                        await this.xliffController.handleTranslationUpdate(document, e.changes);
+                        webviewPanel.dispose();
                     }
-                    break;
-                case 'saveState':
-                    this.hasUnsavedChanges = e.hasUnsavedChanges;
                     break;
             }
         });
 
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
-            if (e.document.uri.toString() === document.uri.toString() && !this.updating) {
-                this.updateWebview(webviewPanel.webview, document);
+            if (e.document.uri.toString() === document.uri.toString()) {
+                this.xliffController.updateWebview(webviewPanel.webview, document);
             }
         });
 
         webviewPanel.onDidDispose(() => changeDocumentSubscription.dispose());
-    }
-
-    private async updateWebview(webview: vscode.Webview, document: vscode.TextDocument) {
-        try {
-            const content = await this.xliffParser.parseContent(document.getText());
-            webview.postMessage({ type: 'update', content });
-        } catch (error) {
-            console.error('Error updating webview:', error);
-            vscode.window.showErrorMessage(
-                `Failed to parse XLF document: ${error instanceof Error ? error.message : String(error)}`
-            );
-        }
     }
 }

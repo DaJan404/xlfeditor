@@ -36,22 +36,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.XlfEditorProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const WebviewContent_1 = require("../view/WebviewContent");
-const XlfParser_1 = require("../utils/XlfParser");
-const XlfUpdater_1 = require("../utils/XlfUpdater");
+const XlfController_1 = require("../controllers/XlfController");
 class XlfEditorProvider {
     context;
     static instance;
     static viewType = 'xlf-editor.translator';
-    updating = false;
-    hasUnsavedChanges = false;
     webviewPanel;
-    xliffParser;
-    xliffUpdater;
-    // Singleton pattern
+    xliffController;
+    webView;
     constructor(context) {
         this.context = context;
-        this.xliffParser = new XlfParser_1.XliffParser();
-        this.xliffUpdater = new XlfUpdater_1.XliffUpdater();
+        this.xliffController = XlfController_1.XliffController.getInstance();
+        this.webView = WebviewContent_1.WebView.getInstance();
     }
     static getInstance(context) {
         if (!XlfEditorProvider.instance) {
@@ -64,52 +60,27 @@ class XlfEditorProvider {
     }
     async resolveCustomTextEditor(document, webviewPanel, _token) {
         this.webviewPanel = webviewPanel;
-        this.initializeWebview(webviewPanel);
-        await this.updateWebview(webviewPanel.webview, document);
+        this.webView.initialize(webviewPanel);
+        await this.xliffController.updateWebview(webviewPanel.webview, document);
         this.setupMessageHandlers(webviewPanel, document);
-    }
-    initializeWebview(webviewPanel) {
-        webviewPanel.webview.options = { enableScripts: true };
-        webviewPanel.webview.html = (0, WebviewContent_1.getWebviewContent)();
     }
     setupMessageHandlers(webviewPanel, document) {
         webviewPanel.webview.onDidReceiveMessage(async (e) => {
             switch (e.type) {
                 case 'update':
-                    if (!this.updating) {
-                        this.updating = true;
-                        try {
-                            if (Array.isArray(e.changes)) {
-                                await this.xliffUpdater.updateTranslations(document, e.changes);
-                                webviewPanel.dispose();
-                            }
-                        }
-                        finally {
-                            this.updating = false;
-                        }
+                    if (Array.isArray(e.changes)) {
+                        await this.xliffController.handleTranslationUpdate(document, e.changes);
+                        webviewPanel.dispose();
                     }
-                    break;
-                case 'saveState':
-                    this.hasUnsavedChanges = e.hasUnsavedChanges;
                     break;
             }
         });
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
-            if (e.document.uri.toString() === document.uri.toString() && !this.updating) {
-                this.updateWebview(webviewPanel.webview, document);
+            if (e.document.uri.toString() === document.uri.toString()) {
+                this.xliffController.updateWebview(webviewPanel.webview, document);
             }
         });
         webviewPanel.onDidDispose(() => changeDocumentSubscription.dispose());
-    }
-    async updateWebview(webview, document) {
-        try {
-            const content = await this.xliffParser.parseContent(document.getText());
-            webview.postMessage({ type: 'update', content });
-        }
-        catch (error) {
-            console.error('Error updating webview:', error);
-            vscode.window.showErrorMessage(`Failed to parse XLF document: ${error instanceof Error ? error.message : String(error)}`);
-        }
     }
 }
 exports.XlfEditorProvider = XlfEditorProvider;
