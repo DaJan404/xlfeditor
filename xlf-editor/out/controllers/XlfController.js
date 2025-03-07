@@ -42,6 +42,7 @@ class XliffController {
     updating = false;
     parser;
     updater;
+    // Singleton pattern
     constructor() {
         this.parser = new XlfParser_1.XliffParser();
         this.updater = new XlfUpdater_1.XliffUpdater();

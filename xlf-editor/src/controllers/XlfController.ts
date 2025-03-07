@@ -8,6 +8,7 @@ export class XliffController {
     private readonly parser: XliffParser;
     private readonly updater: XliffUpdater;
 
+    // Singleton pattern
     private constructor() {
         this.parser = new XliffParser();
         this.updater = new XliffUpdater();
