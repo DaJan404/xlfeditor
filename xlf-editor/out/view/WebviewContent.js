@@ -192,7 +192,6 @@ class WebView {
                         row.innerHTML = \`
                             <td>
                                 <div class="translation-item">
-                                    <div class="index-number">#\${index + 1}</div>
                                     <div class="source-text">\${escapeHtml(unit.source)}</div>
                                     \${unit.notes?.length > 0 ? \`
                                         <div class="notes">
@@ -211,7 +210,6 @@ class WebView {
                             </td>
                             <td>
                                 <div class="translation-item">
-                                    <div class="index-number">#\${index + 1}</div>
                                     <textarea 
                                         data-id="\${escapeHtml(unit.id)}"
                                         placeholder="Enter translation here..."
