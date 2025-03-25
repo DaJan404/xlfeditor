@@ -17,6 +17,21 @@
         "command": "xlf-editor.openXlf",
         "title": "Open XLF File",
         "category": "XLF Editor"
+      },
+      {
+        "command": "xlf-editor.importReference",
+        "title": "Import XLF",
+        "category": "XLF Editor"
+      },
+      {
+        "command": "xlf-editor.clearReferences",
+        "title": "Clear imported XLF",
+        "category": "XLF Editor"
+      },
+      {
+        "command": "xlf-editor.showStoredTranslations",
+        "title": "Show Stored Translations",
+        "category": "XLF Editor"
       }
     ],
     "customEditors": [{
