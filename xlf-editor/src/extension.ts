@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { XlfEditorProvider } from './providers/XlfEditorProvider';
 import { TranslationStorage } from './Database/TranslationStorage';
 import { XliffParser } from './utils/XlfParser';
@@ -20,6 +21,14 @@ interface ParsedXlf {
     transUnits: TransUnit[];
 }
 
+const SUPPORTED_LANGUAGES = [
+    { id: 'de-DE', label: 'German (Germany)' },
+    { id: 'en-US', label: 'English (United States)' },
+    { id: 'fr-FR', label: 'French (France)' },
+    { id: 'es-ES', label: 'Spanish (Spain)' },
+    { id: 'it-IT', label: 'Italian (Italy)' }
+];
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('XLF Editor extension is now active!');
 
@@ -29,6 +38,18 @@ export function activate(context: vscode.ExtensionContext) {
     const storage = TranslationStorage.getInstance(context);
     const parser = new XliffParser();
 
+    //check for existing language files
+    async function getExistingLanguages(originalPath: string): Promise<string[]> {
+        const dir = path.dirname(originalPath);
+        const baseName = path.basename(originalPath, '.xlf');
+        const files = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
+        
+        return files
+            .filter(([name]) => name.startsWith(baseName) && name.match(/\.[a-z]{2}-[A-Z]{2}\.xlf$/))
+            .map(([name]) => name.match(/\.([a-z]{2}-[A-Z]{2})\.xlf$/)?.[1] || '');
+    }
+
+    //openXlf command
     let openXlfCommand = vscode.commands.registerCommand('xlf-editor.openXlf', async () => {
         const fileUri = await vscode.window.showOpenDialog({
             canSelectFiles: true,
@@ -40,7 +61,92 @@ export function activate(context: vscode.ExtensionContext) {
         });
 
         if (fileUri && fileUri[0]) {
-            // Open the file in our custom editor
+            const filename = fileUri[0].fsPath;
+            
+            // Check if this is an original file (no language code in filename)
+            if (!filename.match(/\.[a-z]{2}-[A-Z]{2}\.xlf$/)) {
+                // Get existing language files
+                const existingLanguages = await getExistingLanguages(filename);
+                
+                // Filter out languages that already exist
+                const availableLanguages = SUPPORTED_LANGUAGES.filter(
+                    lang => !existingLanguages.includes(lang.id)
+                );
+
+                if (availableLanguages.length === 0) {
+                    vscode.window.showInformationMessage(
+                        'Translation files for all supported languages already exist.'
+                    );
+                    return;
+                }
+
+                const language = await vscode.window.showQuickPick(
+                    availableLanguages.map(lang => ({
+                        label: lang.label,
+                        description: lang.id,
+                        id: lang.id
+                    })),
+                    { 
+                        placeHolder: 'Create translation file for language:',
+                        title: 'Select Target Language',
+                        ignoreFocusOut: true,
+                        canPickMany: false
+                    }
+                );
+
+                if (language) {
+                    try {
+                        // Read original file
+                        const content = await vscode.workspace.fs.readFile(fileUri[0]);
+                        let xmlContent = content.toString();
+
+                        // Create new filename with language code
+                        const newPath = filename.replace(
+                            /\.xlf$/,
+                            `.${language.id}.xlf`
+                        );
+                        const newUri = vscode.Uri.file(newPath);
+
+                        // Update target-language attribute
+                        xmlContent = xmlContent.replace(
+                            /(target-language=")[^"]*(")/,
+                            `$1${language.id}$2`
+                        );
+
+                        // If no target-language attribute exists, add it
+                        if (!xmlContent.includes('target-language=')) {
+                            xmlContent = xmlContent.replace(
+                                /<file([^>]*)>/,
+                                `<file$1 target-language="${language.id}">`
+                            );
+                        }
+
+                        // Write new file
+                        await vscode.workspace.fs.writeFile(
+                            newUri,
+                            Buffer.from(xmlContent)
+                        );
+
+                        // Open the new file
+                        await vscode.commands.executeCommand(
+                            'vscode.openWith',
+                            newUri,
+                            'xlf-editor.translator'
+                        );
+                        
+                        vscode.window.showInformationMessage(
+                            `Created ${language.label} translation file`
+                        );
+                        return;
+                    } catch (error) {
+                        vscode.window.showErrorMessage(
+                            `Failed to create language copy: ${error instanceof Error ? error.message : String(error)}`
+                        );
+                    }
+                }
+            }
+            
+            // Open the original file if no copy was created
             await vscode.commands.executeCommand('vscode.openWith', fileUri[0], 'xlf-editor.translator');
         }
     });
