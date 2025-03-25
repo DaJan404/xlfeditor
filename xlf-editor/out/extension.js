@@ -120,7 +120,7 @@ function activate(context) {
                     }
                 }
             }
-            // Open the original file if no copy was created
+            // Open  original file if no copy was created
             await vscode.commands.executeCommand('vscode.openWith', fileUri[0], 'xlf-editor.translator');
         }
     });
