@@ -108,13 +108,16 @@ class WebView {
                     border-radius: 4px;
                 }
                 .header-actions {
-                    position: fixed;
-                    top: 10px;
+                    position: sticky;
+                    top: 0;
                     right: 20px;
-                    z-index: 3;
+                    padding: 10px;
+                    text-align: right;
+                    background-color: var(--vscode-editor-background);
+                    z-index: 4;
                 }
                 .save-button {
-                    padding: 4px 12px;
+                    padding: 6px 16px;
                     background-color: var(--vscode-button-background);
                     color: var(--vscode-button-foreground);
                     border: none;
@@ -122,6 +125,7 @@ class WebView {
                     cursor: pointer;
                     font-family: var(--vscode-font-family);
                     font-size: var(--vscode-font-size);
+                    font-weight: 500;
                 }
                 .save-button:hover {
                     background-color: var(--vscode-button-hoverBackground);
@@ -130,26 +134,75 @@ class WebView {
                     opacity: 0.5;
                     cursor: not-allowed;
                 }
+                .filter-bar {
+                    position: sticky;
+                    top: 40px;  // Move down to accommodate the save button
+                    background-color: var(--vscode-editor-background);
+                    padding: 10px;
+                    z-index: 3;
+                    border-bottom: 1px solid var(--vscode-panel-border);
+                }
+                .filter-group {
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                }
+                .filter-input {
+                    flex: 1;
+                    padding: 4px 8px;
+                    background-color: var(--vscode-input-background);
+                    color: var(--vscode-input-foreground);
+                    border: 1px solid var(--vscode-input-border);
+                    border-radius: 2px;
+                }
+                .filter-select {
+                    padding: 4px 8px;
+                    background-color: var(--vscode-dropdown-background);
+                    color: var(--vscode-dropdown-foreground);
+                    border: 1px solid var(--vscode-dropdown-border);
+                    border-radius: 2px;
+                }
+                .filter-count {
+                    color: var(--vscode-descriptionForeground);
+                    font-size: 12px;
+                }
+                .hidden {
+                    display: none !important;
+                }
             </style>
         </head>
         <body>
             <div class="header-actions">
                 <button id="saveButton" class="save-button" disabled>Save Changes</button>
             </div>
-            <table class="table">
-                <thead class="table-header">
-                    <tr>
-                        <th id="sourceHeader">Source Text</th>
-                        <th id="translationHeader">Translation</th>
-                    </tr>
-                </thead>
-                <tbody id="translationRows">
-                </tbody>
-            </table>
+            <div class="filter-bar">
+                <div class="filter-group">
+                    <input type="text" id="searchInput" class="filter-input" placeholder="Search in source or translation...">
+                    <select id="filterType" class="filter-select">
+                        <option value="all">All</option>
+                        <option value="untranslated">Untranslated Only</option>
+                        <option value="translated">Translated Only</option>
+                    </select>
+                    <span id="filterCount" class="filter-count"></span>
+                </div>
+            </div>
+            <div class="content">
+                <table class="table">
+                    <thead class="table-header">
+                        <tr>
+                            <th id="sourceHeader">Source Text</th>
+                            <th id="translationHeader">Translation</th>
+                        </tr>
+                    </thead>
+                    <tbody id="translationRows">
+                    </tbody>
+                </table>
+            </div>
             <script>
                 const vscode = acquireVsCodeApi();
                 let hasUnsavedChanges = false;
-                
+                let currentData = null;
+
                 function updateSaveState(state) {
                     hasUnsavedChanges = state;
                     document.getElementById('saveButton').disabled = !state;
@@ -172,6 +225,7 @@ class WebView {
                 });
 
                 function updateContent(data) {
+                    currentData = data;  // Store the current data
                     const tbody = document.getElementById('translationRows');
                     const sourceHeader = document.getElementById('sourceHeader');
                     const translationHeader = document.getElementById('translationHeader');
@@ -239,11 +293,19 @@ class WebView {
                         });
                     });
 
+                    document.getElementById('searchInput').addEventListener('input', filterTranslations);
+                    document.getElementById('filterType').addEventListener('change', filterTranslations);
+
+                    filterTranslations();  // Apply initial filtering
+                }
+
+                // Move save button event listener outside the updateContent function
+                if (!document.getElementById('saveButton').hasListener) {
+                    document.getElementById('saveButton').hasListener = true;
                     document.getElementById('saveButton').addEventListener('click', () => {
                         const changes = [];
-                        document.querySelectorAll('textarea').forEach(textarea => {
+                        document.querySelectorAll('#translationRows tr:not(.hidden) textarea').forEach(textarea => {
                             changes.push({
-                                type: 'update',
                                 id: textarea.dataset.id,
                                 value: textarea.value.trim()
                             });
@@ -271,6 +333,46 @@ class WebView {
                 function autoResizeTextarea(textarea) {
                     textarea.style.height = 'auto';
                     textarea.style.height = (textarea.scrollHeight) + 'px';
+                }
+
+                function filterTranslations() {
+                    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+                    const filterType = document.getElementById('filterType').value;
+                    const rows = document.querySelectorAll('#translationRows tr');
+                    let visibleCount = 0;
+
+                    rows.forEach(row => {
+                        const sourceText = row.querySelector('.source-text').textContent.toLowerCase();
+                        const translationText = row.querySelector('textarea').value.toLowerCase();
+                        const isTranslated = translationText.trim().length > 0;
+
+                        let show = true;
+
+                        // Filter by search term
+                        if (searchTerm) {
+                            show = sourceText.includes(searchTerm) || 
+                                translationText.includes(searchTerm);
+                        }
+
+                        // Filter by translation status
+                        if (show && filterType !== 'all') {
+                            if (filterType === 'untranslated' && isTranslated) {
+                                show = false;
+                            } else if (filterType === 'translated' && !isTranslated) {
+                                show = false;
+                            }
+                        }
+
+                        row.classList.toggle('hidden', !show);
+                        if (show) {
+                            visibleCount++;
+                        }
+                    });
+
+                    // Update counter
+                    const total = rows.length;
+                    document.getElementById('filterCount').textContent = 
+                        \`Showing \${visibleCount} of \${total} items\`;
                 }
             </script>
         </body>
