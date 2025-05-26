@@ -34,14 +34,18 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TranslationStorage = void 0;
-const vscode = __importStar(require("vscode"));
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 class TranslationStorage {
     static instances = new WeakMap();
-    storage;
-    STORAGE_KEY = 'xlf-editor.storedTranslations';
-    cachedTranslations = null;
+    storagePath;
+    cachedTranslations = []; // Initialize as empty array instead of null
     constructor(context) {
-        this.storage = context.globalState;
+        this.storagePath = context.globalStorageUri.fsPath;
+        // Ensure storage directory exists
+        if (!fs.existsSync(this.storagePath)) {
+            fs.mkdirSync(this.storagePath, { recursive: true });
+        }
     }
     static getInstance(context) {
         if (!TranslationStorage.instances.has(context)) {
@@ -49,42 +53,56 @@ class TranslationStorage {
         }
         return TranslationStorage.instances.get(context);
     }
+    get dbPath() {
+        return path.join(this.storagePath, 'translations.json');
+    }
     async getStoredTranslations() {
-        if (this.cachedTranslations === null) {
-            this.cachedTranslations = await this.storage.get(this.STORAGE_KEY, []);
+        if (this.cachedTranslations.length === 0) { // Check length instead of null
+            try {
+                if (fs.existsSync(this.dbPath)) {
+                    const data = await fs.promises.readFile(this.dbPath, 'utf8');
+                    this.cachedTranslations = JSON.parse(data);
+                }
+            }
+            catch (error) {
+                console.error('Error reading translations:', error);
+                this.cachedTranslations = [];
+            }
         }
         return this.cachedTranslations;
     }
     async storeTranslations(translations) {
-        // Load existing translations if not cached
-        if (this.cachedTranslations === null) {
-            this.cachedTranslations = await this.storage.get(this.STORAGE_KEY, []);
-        }
-        // Create Map from existing translations for faster lookups
-        const uniqueTranslations = new Map();
-        // Add existing translations to map
-        for (const translation of this.cachedTranslations) {
-            uniqueTranslations.set(translation.id, translation);
-        }
-        // Update or add new translations
-        for (const translation of translations) {
-            uniqueTranslations.set(translation.id, translation);
-        }
-        // Convert map back to array
-        this.cachedTranslations = Array.from(uniqueTranslations.values());
-        // Store in chunks if the data is large
         try {
-            await this.storage.update(this.STORAGE_KEY, this.cachedTranslations);
+            // Load existing translations
+            const existing = await this.getStoredTranslations();
+            // Create Map for efficient updates
+            const uniqueTranslations = new Map(existing.map(t => [t.id, t]));
+            // Update or add new translations
+            for (const translation of translations) {
+                uniqueTranslations.set(translation.id, translation);
+            }
+            // Convert back to array
+            this.cachedTranslations = Array.from(uniqueTranslations.values());
+            // Write to file
+            await fs.promises.writeFile(this.dbPath, JSON.stringify(this.cachedTranslations, null, 2), 'utf8');
         }
-        catch (error) {
+        catch (error) { // Add type annotation here
             console.error('Error storing translations:', error);
-            vscode.window.showErrorMessage('Failed to store translations: The data might be too large');
-            throw error;
+            throw new Error('Failed to store translations: ' +
+                (error instanceof Error ? error.message : String(error)));
         }
     }
     async clearStoredTranslations() {
         this.cachedTranslations = [];
-        await this.storage.update(this.STORAGE_KEY, []);
+        try {
+            if (fs.existsSync(this.dbPath)) {
+                await fs.promises.unlink(this.dbPath);
+            }
+        }
+        catch (error) { // Add type annotation here
+            console.error('Error clearing translations:', error);
+            throw error instanceof Error ? error : new Error(String(error));
+        }
     }
 }
 exports.TranslationStorage = TranslationStorage;

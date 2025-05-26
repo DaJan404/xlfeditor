@@ -1,4 +1,24 @@
 import * as xml2js from 'xml2js';
+import { TransUnit } from '../extension';
+
+interface XmlTransUnit {
+    $: {
+        id: string;
+    };
+    source?: {
+        _: string;
+    };
+    target?: {
+        _: string;
+    };
+    note?: Array<{
+        $: {
+            from: string;
+            priority: string;
+        };
+        _: string;
+    }>;
+}
 
 export class XliffParser {
     private parseCache = new Map<string, any>();
@@ -45,13 +65,13 @@ export class XliffParser {
 
     private getTransUnits(units: any) {
         const transUnits = Array.isArray(units) ? units : [units];
-        return transUnits.map(this.transformTransUnit);
+        return transUnits.map((unit: XmlTransUnit) => this.transformTransUnit(unit));
     }
 
-    private transformTransUnit(unit: any) {
+    private transformTransUnit(unit: XmlTransUnit): TransUnit {
         return {
             id: unit.$.id || '',
-            source: unit.source?._ || '',
+            source: unit.source?._|| '',
             target: unit.target?._ || '',
             notes: XliffParser.transformNotes(unit.note)
         };

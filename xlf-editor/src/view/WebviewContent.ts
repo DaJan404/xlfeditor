@@ -208,6 +208,7 @@ export class WebView {
                 const vscode = acquireVsCodeApi();
                 let hasUnsavedChanges = false;
                 let currentData = null;
+                const state = vscode.getState() || { scrollPosition: 0 };
 
                 function updateSaveState(state) {
                     hasUnsavedChanges = state;
@@ -238,6 +239,11 @@ export class WebView {
                         vscode.postMessage({ type: 'pretranslate' });
                     });
                 }
+
+                document.addEventListener('scroll', () => {
+                    state.scrollPosition = window.scrollY;
+                    vscode.setState(state);
+                });
 
                 function updateContent(data) {
                     currentData = data;  // Store the current data
@@ -312,6 +318,12 @@ export class WebView {
                     document.getElementById('filterType').addEventListener('change', filterTranslations);
 
                     filterTranslations();  // Apply initial filtering
+
+                    // Restore scroll position
+                    const savedState = vscode.getState();
+                    if (savedState && savedState.scrollPosition) {
+                        window.scrollTo(0, savedState.scrollPosition);
+                    }
                 }
 
                 if (!document.getElementById('saveButton').hasListener) {

@@ -78,49 +78,78 @@ class XliffController {
         }
     }
     async pretranslate(document, context) {
-        const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
-        const dbTranslations = await storage.getStoredTranslations();
-        // If no translations stored, exit early
-        if (!dbTranslations.length) {
-            return this.parser.parseContent(document.getText());
-        }
-        const config = vscode.workspace.getConfiguration('xlfEditor');
-        const minPercent = config.get('pretranslateMinPercent', 80);
-        const parsed = await this.parser.parseContent(document.getText());
-        // Get translations only for matching source language
-        const relevantTranslations = dbTranslations.filter(t => t.sourceLanguage === parsed.sourceLanguage &&
-            t.targetLanguage === parsed.targetLanguage);
-        if (!relevantTranslations.length) {
-            vscode.window.showInformationMessage(`No translations found for ${parsed.sourceLanguage} → ${parsed.targetLanguage}`);
-            return parsed;
-        }
-        // Process in batches for better responsiveness
-        const BATCH_SIZE = 50;
-        for (let i = 0; i < parsed.transUnits.length; i += BATCH_SIZE) {
-            const batch = parsed.transUnits.slice(i, i + BATCH_SIZE);
-            await new Promise(resolve => setTimeout(resolve, 0)); // Allow UI updates
-            for (const unit of batch) {
-                if (unit.target)
-                    continue; // Skip already translated units
-                let bestMatch;
-                let bestPercent = 0;
-                // Only compare with translations that match our language pair
-                for (const db of relevantTranslations) {
-                    const percent = (0, similarity_1.similarity)(unit.source, db.source);
-                    if (percent > bestPercent) {
-                        bestPercent = percent;
-                        bestMatch = db;
-                    }
-                    if (percent === 100)
-                        break; // Perfect match found, stop searching
+        return vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "Pre-translating XLF file...",
+            cancellable: false
+        }, async (progress) => {
+            try {
+                const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
+                const dbTranslations = await storage.getStoredTranslations();
+                if (!dbTranslations.length) {
+                    vscode.window.showInformationMessage('No translations in storage.');
+                    return;
                 }
-                unit.matchPercent = Math.round(bestPercent);
-                if (bestMatch && bestPercent >= minPercent) {
-                    unit.target = bestMatch.target;
+                const parsed = await this.parser.parseContent(document.getText());
+                // Get translations only for matching source language
+                const relevantTranslations = dbTranslations.filter(t => t.sourceLanguage === parsed.sourceLanguage &&
+                    t.targetLanguage === parsed.targetLanguage);
+                if (!relevantTranslations.length) {
+                    vscode.window.showInformationMessage(`No translations found for ${parsed.sourceLanguage} → ${parsed.targetLanguage}`);
+                    return;
+                }
+                const config = vscode.workspace.getConfiguration('xlfEditor');
+                const minPercent = config.get('pretranslateMinPercent', 80);
+                let changed = false;
+                // Process in batches
+                const BATCH_SIZE = 25;
+                for (let i = 0; i < parsed.transUnits.length; i += BATCH_SIZE) {
+                    const batch = parsed.transUnits.slice(i, Math.min(i + parsed.transUnits.length, i + BATCH_SIZE));
+                    for (const unit of batch) {
+                        if (unit.target)
+                            continue; // Skip already translated units
+                        let bestMatch;
+                        let bestPercent = 0;
+                        for (const db of relevantTranslations) {
+                            const percent = (0, similarity_1.similarity)(unit.source, db.source);
+                            if (percent > bestPercent) {
+                                bestPercent = percent;
+                                bestMatch = db;
+                            }
+                            if (percent === 100)
+                                break;
+                        }
+                        if (bestMatch && bestPercent >= minPercent) {
+                            unit.target = bestMatch.target;
+                            changed = true;
+                        }
+                        unit.matchPercent = Math.round(bestPercent);
+                    }
+                    progress.report({
+                        message: `Processed ${Math.min((i + BATCH_SIZE), parsed.transUnits.length)} of ${parsed.transUnits.length} units`,
+                        increment: (BATCH_SIZE / parsed.transUnits.length) * 100
+                    });
+                }
+                if (changed) {
+                    // Update the document using XliffUpdater
+                    const changes = parsed.transUnits
+                        .filter((unit) => unit.target)
+                        .map((unit) => ({
+                        id: unit.id,
+                        value: unit.target
+                    }));
+                    await this.updater.updateTranslations(document, changes);
+                    vscode.window.showInformationMessage('Pre-translation complete.');
+                }
+                else {
+                    vscode.window.showInformationMessage('No matches found for pre-translation.');
                 }
             }
-        }
-        return parsed;
+            catch (error) {
+                console.error('Error in pretranslate:', error);
+                throw error;
+            }
+        });
     }
     async clearTranslations(document) {
         const parsed = await this.parser.parseContent(document.getText());

@@ -9,16 +9,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:xlf-editor.openXlf",
-    "onCommand:xlf-editor.importReference",
-    "onCommand:xlf-editor.clearReferences",
-    "onCommand:xlf-editor.showStoredTranslations",
-    "onCommand:xlf-editor.pretranslate",
-    "onLanguage:xlf",
-    "onFileSystem:xlf",
-    "onCustomEditor:xlf-editor.translator"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [

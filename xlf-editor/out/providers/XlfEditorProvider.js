@@ -44,6 +44,7 @@ class XlfEditorProvider {
     xliffController;
     webView;
     context;
+    lastDocumentText = '';
     constructor(context) {
         this.context = context;
         this.xliffController = XlfController_1.XliffController.getInstance();
@@ -59,10 +60,22 @@ class XlfEditorProvider {
         return vscode.window.registerCustomEditorProvider(XlfEditorProvider.viewType, XlfEditorProvider.getInstance(context));
     }
     async resolveCustomTextEditor(document, webviewPanel, _token) {
-        this.webviewPanel = webviewPanel;
-        this.webView.initialize(webviewPanel);
-        await this.xliffController.updateWebview(webviewPanel.webview, document);
-        this.setupMessageHandlers(webviewPanel, document);
+        try {
+            this.webviewPanel = webviewPanel;
+            this.webView.initialize(webviewPanel);
+            await this.xliffController.updateWebview(webviewPanel.webview, document);
+            this.setupMessageHandlers(webviewPanel, document);
+            // Handle tab visibility changes
+            webviewPanel.onDidChangeViewState(e => {
+                if (e.webviewPanel.visible) {
+                    this.xliffController.updateWebview(webviewPanel.webview, document);
+                }
+            });
+        }
+        catch (error) {
+            console.error('Error in resolveCustomTextEditor:', error);
+            vscode.window.showErrorMessage('Failed to load XLF file: ' + (error instanceof Error ? error.message : String(error)));
+        }
     }
     setupMessageHandlers(webviewPanel, document) {
         webviewPanel.webview.onDidReceiveMessage(async (e) => {
@@ -95,12 +108,22 @@ class XlfEditorProvider {
         });
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
             if (e.document.uri.toString() === document.uri.toString()) {
-                if (webviewPanel.visible) {
-                    this.xliffController.updateWebview(webviewPanel.webview, document);
+                // Only update if content actually changed
+                const currentText = document.getText();
+                if (currentText !== this.lastDocumentText) {
+                    this.lastDocumentText = currentText;
+                    if (webviewPanel.visible) {
+                        this.xliffController.updateWebview(webviewPanel.webview, document);
+                    }
                 }
             }
         });
-        webviewPanel.onDidDispose(() => changeDocumentSubscription.dispose());
+        // Save initial state
+        this.lastDocumentText = document.getText();
+        webviewPanel.onDidDispose(() => {
+            changeDocumentSubscription.dispose();
+            this.lastDocumentText = ''; // Clear the cache when panel is disposed
+        });
     }
 }
 exports.XlfEditorProvider = XlfEditorProvider;

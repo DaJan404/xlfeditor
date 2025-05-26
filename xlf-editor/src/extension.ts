@@ -200,37 +200,37 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     let showStoredCommand = vscode.commands.registerCommand('xlf-editor.showStoredTranslations', async () => {
+        try {
+            const storage = TranslationStorage.getInstance(context);
+            const translations = await storage.getStoredTranslations();
 
-        const storage = TranslationStorage.getInstance(context);
-        const parser = new XliffParser();
+            if (translations.length === 0) {
+                vscode.window.showInformationMessage('No stored translations found');
+                return;
+            }
 
-        const translations = await storage.getStoredTranslations();
-
-        if (translations.length === 0) {
-            vscode.window.showInformationMessage('No stored translations found');
-            return;
-        }
-
-        // Create and show output channel
-        const output = vscode.window.createOutputChannel('XLF Stored Translations');
-        output.clear();
-        output.appendLine(`Found ${translations.length} stored translations:`);
-        output.appendLine('-----------------------------------');
-
-        translations.forEach((t, index) => {
-            output.appendLine(`[${index + 1}] ID: ${t.id}`);
-            output.appendLine(`Source (${t.sourceLanguage}): ${t.source}`);
-            output.appendLine(`Target (${t.targetLanguage}): ${t.target}`);
+            // Create and show output channel
+            const output = vscode.window.createOutputChannel('XLF Stored Translations');
+            output.clear();
+            output.appendLine(`Found ${translations.length} stored translations:`);
             output.appendLine('-----------------------------------');
-        });
 
-        output.show();
+            translations.forEach((t, index) => {
+                output.appendLine(`[${index + 1}] ID: ${t.id}`);
+                output.appendLine(`Source (${t.sourceLanguage}): ${t.source}`);
+                output.appendLine(`Target (${t.targetLanguage}): ${t.target}`);
+                output.appendLine('-----------------------------------');
+            });
+
+            output.show();
+        } catch (error) {
+            console.error('Error showing stored translations:', error);
+            vscode.window.showErrorMessage('Failed to show stored translations: ' + 
+                (error instanceof Error ? error.message : String(error)));
+        }
     });
 
     let pretranslateCommand = vscode.commands.registerCommand('xlf-editor.pretranslate', async () => {
-        const storage = TranslationStorage.getInstance(context);
-        const parser = new XliffParser();
-
         const fileUri = await vscode.window.showOpenDialog({
             canSelectFiles: true,
             canSelectFolders: false,
@@ -240,94 +240,19 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (!fileUri || !fileUri[0]) return;
 
-        await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: "Pre-translating XLF file...",
-            cancellable: false
-        }, async (progress) => {
-            const config = vscode.workspace.getConfiguration('xlfEditor');
-            const minPercent = config.get<number>('pretranslateMinPercent', 80);
+        const document = await vscode.workspace.openTextDocument(fileUri[0]);
+        const controller = XliffController.getInstance();
 
-            const content = await vscode.workspace.fs.readFile(fileUri[0]);
-            const parsed = await parser.parseContent(content.toString()) as ParsedXlf;
-            const dbTranslations = await storage.getStoredTranslations();
-
-            let changed = false;
-            const results: { id: string, source: string, target: string, percent: number }[] = [];
-
-            for (const unit of parsed.transUnits) {
-                let bestMatch: StoredTranslation | undefined;
-                let bestPercent = 0;
-
-                for (const db of dbTranslations) {
-                    const percent = similarity(unit.source, db.source);
-                    if (percent > bestPercent) {
-                        bestPercent = percent;
-                        bestMatch = db;
-                    }
-                }
-
-                if (bestMatch && bestPercent >= minPercent && !unit.target) {
-                    unit.target = bestMatch.target;
-                    changed = true;
-                }
-
-                // For test: collect percent for each line
-                results.push({
-                    id: unit.id,
-                    source: unit.source,
-                    target: bestMatch ? bestMatch.target : '',
-                    percent: Math.round(bestPercent)
-                });
-            }
-
-            if (changed) {
-                // Save the updated file (overwrite)
-                const builder = require('xml2js').Builder;
-                const xmlBuilder = new builder({
-                    xmldec: { version: '1.0', encoding: 'utf-8' },
-                    renderOpts: { pretty: true, indent: '  ' },
-                    cdata: false
-                });
-
-                // Reconstruct the XLF structure as in your parser
-                const file = {
-                    xliff: {
-                        $: { version: '1.2' },
-                        file: {
-                            $: {
-                                'source-language': parsed.sourceLanguage,
-                                'target-language': parsed.targetLanguage
-                            },
-                            body: {
-                                group: {
-                                    'trans-unit': parsed.transUnits.map(unit => ({
-                                        $: { id: unit.id },
-                                        source: { _: unit.source },
-                                        target: { _: unit.target || '' }
-                                    }))
-                                }
-                            }
-                        }
-                    }
-                };
-
-                const updatedXml = xmlBuilder.buildObject(file);
-                await vscode.workspace.fs.writeFile(fileUri[0], Buffer.from(updatedXml));
-                vscode.window.showInformationMessage('Pre-translation complete.');
-            } else {
-                vscode.window.showInformationMessage('No matches found for pre-translation.');
-            }
-
-            // Show results in output for test purposes
-            const output = vscode.window.createOutputChannel('XLF Pre-Translation');
-            output.clear();
-            output.appendLine('Pre-translation results (percent match per line):');
-            results.forEach(r => {
-                output.appendLine(`[${r.id}] ${r.percent}% | Source: ${r.source} | Target: ${r.target}`);
-            });
-            output.show();
-        });
+        try {
+            await controller.pretranslate(document, context);
+            // Open or refresh the editor view
+            await vscode.commands.executeCommand('vscode.openWith', fileUri[0], 'xlf-editor.translator');
+        } catch (error) {
+            console.error('Error in pretranslate command:', error);
+            vscode.window.showErrorMessage(
+                'Failed to pre-translate: ' + (error instanceof Error ? error.message : String(error))
+            );
+        }
     });
 
     context.subscriptions.push(

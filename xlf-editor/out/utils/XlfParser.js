@@ -74,7 +74,7 @@ class XliffParser {
     }
     getTransUnits(units) {
         const transUnits = Array.isArray(units) ? units : [units];
-        return transUnits.map(this.transformTransUnit);
+        return transUnits.map((unit) => this.transformTransUnit(unit));
     }
     transformTransUnit(unit) {
         return {
