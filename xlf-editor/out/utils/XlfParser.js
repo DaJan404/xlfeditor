@@ -36,7 +36,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.XliffParser = void 0;
 const xml2js = __importStar(require("xml2js"));
 class XliffParser {
+    parseCache = new Map();
     async parseContent(content) {
+        const cacheKey = content;
+        if (this.parseCache.has(cacheKey)) {
+            return this.parseCache.get(cacheKey);
+        }
         const parser = new xml2js.Parser({
             explicitArray: false,
             mergeAttrs: false,
@@ -46,7 +51,9 @@ class XliffParser {
         });
         try {
             const result = await parser.parseStringPromise(content);
-            return this.transformXliffData(result);
+            const transformed = this.transformXliffData(result);
+            this.parseCache.set(cacheKey, transformed);
+            return transformed;
         }
         catch (error) {
             console.error('XML parsing error:', error);

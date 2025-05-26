@@ -1,7 +1,14 @@
 import * as xml2js from 'xml2js';
 
 export class XliffParser {
+    private parseCache = new Map<string, any>();
+
     async parseContent(content: string): Promise<any> {
+        const cacheKey = content;
+        if (this.parseCache.has(cacheKey)) {
+            return this.parseCache.get(cacheKey);
+        }
+
         const parser = new xml2js.Parser({
             explicitArray: false,
             mergeAttrs: false,
@@ -12,7 +19,9 @@ export class XliffParser {
 
         try {
             const result = await parser.parseStringPromise(content);
-            return this.transformXliffData(result);
+            const transformed = this.transformXliffData(result);
+            this.parseCache.set(cacheKey, transformed);
+            return transformed;
         } catch (error) {
             console.error('XML parsing error:', error);
             throw error;

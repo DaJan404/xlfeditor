@@ -9,39 +9,63 @@ export interface StoredTranslation {
 }
 
 export class TranslationStorage {
-    private static instance: TranslationStorage;
+    private static instances = new WeakMap<vscode.ExtensionContext, TranslationStorage>();
     private readonly storage: vscode.Memento;
     private readonly STORAGE_KEY = 'xlf-editor.storedTranslations';
+    private cachedTranslations: StoredTranslation[] | null = null;
 
     private constructor(context: vscode.ExtensionContext) {
         this.storage = context.globalState;
     }
 
     public static getInstance(context: vscode.ExtensionContext): TranslationStorage {
-        if (!TranslationStorage.instance) {
-            TranslationStorage.instance = new TranslationStorage(context);
+        if (!TranslationStorage.instances.has(context)) {
+            TranslationStorage.instances.set(context, new TranslationStorage(context));
         }
-        return TranslationStorage.instance;
-    }
-
-    async storeTranslations(translations: StoredTranslation[]): Promise<void> {
-        const existing = await this.getStoredTranslations();
-        const merged = [...existing, ...translations];
-        
-        // Remove duplicates by ID, keeping the latest version
-        const unique = merged.reduce((acc, current) => {
-            acc.set(current.id, current);
-            return acc;
-        }, new Map<string, StoredTranslation>());
-
-        await this.storage.update(this.STORAGE_KEY, Array.from(unique.values()));
+        return TranslationStorage.instances.get(context)!;
     }
 
     async getStoredTranslations(): Promise<StoredTranslation[]> {
-        return this.storage.get<StoredTranslation[]>(this.STORAGE_KEY, []);
+        if (this.cachedTranslations === null) {
+            this.cachedTranslations = await this.storage.get<StoredTranslation[]>(this.STORAGE_KEY, []);
+        }
+        return this.cachedTranslations;
+    }
+
+    async storeTranslations(translations: StoredTranslation[]): Promise<void> {
+        // Load existing translations if not cached
+        if (this.cachedTranslations === null) {
+            this.cachedTranslations = await this.storage.get<StoredTranslation[]>(this.STORAGE_KEY, []);
+        }
+
+        // Create Map from existing translations for faster lookups
+        const uniqueTranslations = new Map<string, StoredTranslation>();
+        
+        // Add existing translations to map
+        for (const translation of this.cachedTranslations) {
+            uniqueTranslations.set(translation.id, translation);
+        }
+        
+        // Update or add new translations
+        for (const translation of translations) {
+            uniqueTranslations.set(translation.id, translation);
+        }
+
+        // Convert map back to array
+        this.cachedTranslations = Array.from(uniqueTranslations.values());
+        
+        // Store in chunks if the data is large
+        try {
+            await this.storage.update(this.STORAGE_KEY, this.cachedTranslations);
+        } catch (error) {
+            console.error('Error storing translations:', error);
+            vscode.window.showErrorMessage('Failed to store translations: The data might be too large');
+            throw error;
+        }
     }
 
     async clearStoredTranslations(): Promise<void> {
+        this.cachedTranslations = [];
         await this.storage.update(this.STORAGE_KEY, []);
     }
 }

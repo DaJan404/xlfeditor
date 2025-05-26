@@ -9,7 +9,16 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:xlf-editor.openXlf",
+    "onCommand:xlf-editor.importReference",
+    "onCommand:xlf-editor.clearReferences",
+    "onCommand:xlf-editor.showStoredTranslations",
+    "onCommand:xlf-editor.pretranslate",
+    "onLanguage:xlf",
+    "onFileSystem:xlf",
+    "onCustomEditor:xlf-editor.translator"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -20,30 +29,50 @@
       },
       {
         "command": "xlf-editor.importReference",
-        "title": "Import XLF",
+        "title": "Import XLF File",
         "category": "XLF Editor"
       },
       {
         "command": "xlf-editor.clearReferences",
-        "title": "Clear imported XLF",
+        "title": "Clear imported XLF File",
         "category": "XLF Editor"
       },
       {
         "command": "xlf-editor.showStoredTranslations",
         "title": "Show Stored Translations",
         "category": "XLF Editor"
+      },
+       {
+        "command": "xlf-editor.pretranslate",
+        "title": "Pre-translate XLF File",
+        "category": "XLF Editor"
       }
     ],
-    "customEditors": [{
-      "viewType": "xlf-editor.translator",
-      "displayName": "XLF Translator",
-      "selector": [
-        {
-          "filenamePattern": "*.xlf"
+    "customEditors": [
+      {
+        "viewType": "xlf-editor.translator",
+        "displayName": "XLF Translator",
+        "selector": [
+          {
+            "filenamePattern": "*.xlf"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "XLF Editor",
+      "properties": {
+        "xlfEditor.pretranslateMinPercent": {
+          "type": "number",
+          "default": 80,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Minimum percent match for pre-translation to apply"
         }
-      ],
-      "priority": "default"
-    }]
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

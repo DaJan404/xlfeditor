@@ -8,8 +8,10 @@ export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
     private webviewPanel?: vscode.WebviewPanel;
     private readonly xliffController: XliffController;
     private readonly webView: WebView;
+    private readonly context: vscode.ExtensionContext;
 
-    private constructor(private readonly context: vscode.ExtensionContext) {
+    private constructor(context: vscode.ExtensionContext) {
+        this.context = context;
         this.xliffController = XliffController.getInstance();
         this.webView = WebView.getInstance();
     }
@@ -41,6 +43,7 @@ export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
 
     private setupMessageHandlers(webviewPanel: vscode.WebviewPanel, document: vscode.TextDocument): void {
         webviewPanel.webview.onDidReceiveMessage(async e => {
+            console.log('Extension received message:', e);
             switch (e.type) {
                 case 'update':
                     if (Array.isArray(e.changes)) {
@@ -48,12 +51,39 @@ export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
                         webviewPanel.dispose();
                     }
                     break;
+                    
+                case 'pretranslate':
+                    const result = await this.xliffController.pretranslate(document, this.context);
+                    webviewPanel.webview.postMessage({ type: 'update', content: result });
+                    break;
+
+                case 'saved':
+                    webviewPanel.webview.postMessage({ type: 'close' }); 
+                    break;
+
+                case 'close':
+                    webviewPanel.dispose();
+                    break;
+
+                case 'confirm-clear':
+                    const answer = await vscode.window.showWarningMessage(
+                        'Are you sure you want to clear all translations?',
+                        'Yes',
+                        'No'
+                    );
+                    if (answer === 'Yes') {
+                        const result = await this.xliffController.clearTranslations(document);
+                        webviewPanel.webview.postMessage({ type: 'update', content: result });
+                    }
+                    break;
             }
         });
 
         const changeDocumentSubscription = vscode.workspace.onDidChangeTextDocument(e => {
             if (e.document.uri.toString() === document.uri.toString()) {
-                this.xliffController.updateWebview(webviewPanel.webview, document);
+                if (webviewPanel.visible) {
+                    this.xliffController.updateWebview(webviewPanel.webview, document);
+                }
             }
         });
 

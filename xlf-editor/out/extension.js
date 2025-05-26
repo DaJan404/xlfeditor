@@ -39,7 +39,9 @@ const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const XlfEditorProvider_1 = require("./providers/XlfEditorProvider");
 const TranslationStorage_1 = require("./Database/TranslationStorage");
+const similarity_1 = require("./utils/similarity");
 const XlfParser_1 = require("./utils/XlfParser");
+const XlfController_1 = require("./controllers/XlfController");
 const SUPPORTED_LANGUAGES = [
     { id: 'de-DE', label: 'German (Germany)' },
     { id: 'en-US', label: 'English (United States)' },
@@ -51,8 +53,6 @@ function activate(context) {
     console.log('XLF Editor extension is now active!');
     // Register custom editor provider
     context.subscriptions.push(XlfEditorProvider_1.XlfEditorProvider.register(context));
-    const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
-    const parser = new XlfParser_1.XliffParser();
     //check for existing language files
     async function getExistingLanguages(originalPath) {
         const dir = path.dirname(originalPath);
@@ -64,6 +64,8 @@ function activate(context) {
     }
     //openXlf command
     let openXlfCommand = vscode.commands.registerCommand('xlf-editor.openXlf', async () => {
+        const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
+        const parser = new XlfParser_1.XliffParser();
         const fileUri = await vscode.window.showOpenDialog({
             canSelectFiles: true,
             canSelectFolders: false,
@@ -95,29 +97,35 @@ function activate(context) {
                     canPickMany: false
                 });
                 if (language) {
-                    try {
-                        // Read original file
-                        const content = await vscode.workspace.fs.readFile(fileUri[0]);
-                        let xmlContent = content.toString();
-                        // Create new filename with language code
-                        const newPath = filename.replace(/\.xlf$/, `.${language.id}.xlf`);
-                        const newUri = vscode.Uri.file(newPath);
-                        // Update target-language attribute
-                        xmlContent = xmlContent.replace(/(target-language=")[^"]*(")/, `$1${language.id}$2`);
-                        // If no target-language attribute exists, add it
-                        if (!xmlContent.includes('target-language=')) {
-                            xmlContent = xmlContent.replace(/<file([^>]*)>/, `<file$1 target-language="${language.id}">`);
+                    await vscode.window.withProgress({
+                        location: vscode.ProgressLocation.Notification,
+                        title: `Creating ${language.label} translation file...`,
+                        cancellable: false
+                    }, async (progress) => {
+                        try {
+                            // Read original file
+                            const content = await vscode.workspace.fs.readFile(fileUri[0]);
+                            let xmlContent = content.toString();
+                            // Create new filename with language code
+                            const newPath = filename.replace(/\.xlf$/, `.${language.id}.xlf`);
+                            const newUri = vscode.Uri.file(newPath);
+                            // Update target-language attribute
+                            xmlContent = xmlContent.replace(/(target-language=")[^"]*(")/, `$1${language.id}$2`);
+                            // If no target-language attribute exists, add it
+                            if (!xmlContent.includes('target-language=')) {
+                                xmlContent = xmlContent.replace(/<file([^>]*)>/, `<file$1 target-language="${language.id}">`);
+                            }
+                            // Write new file
+                            await vscode.workspace.fs.writeFile(newUri, Buffer.from(xmlContent));
+                            // Open the new file
+                            await vscode.commands.executeCommand('vscode.openWith', newUri, 'xlf-editor.translator');
+                            vscode.window.showInformationMessage(`Created ${language.label} translation file`);
+                            return;
                         }
-                        // Write new file
-                        await vscode.workspace.fs.writeFile(newUri, Buffer.from(xmlContent));
-                        // Open the new file
-                        await vscode.commands.executeCommand('vscode.openWith', newUri, 'xlf-editor.translator');
-                        vscode.window.showInformationMessage(`Created ${language.label} translation file`);
-                        return;
-                    }
-                    catch (error) {
-                        vscode.window.showErrorMessage(`Failed to create language copy: ${error instanceof Error ? error.message : String(error)}`);
-                    }
+                        catch (error) {
+                            vscode.window.showErrorMessage(`Failed to create language copy: ${error instanceof Error ? error.message : String(error)}`);
+                        }
+                    });
                 }
             }
             // Open  original file if no copy was created
@@ -135,24 +143,17 @@ function activate(context) {
         });
         if (fileUri && fileUri[0]) {
             try {
-                const content = await vscode.workspace.fs.readFile(fileUri[0]);
-                const parsed = await parser.parseContent(content.toString());
-                const translations = parsed.transUnits.map((unit) => ({
-                    id: unit.id,
-                    source: unit.source,
-                    target: unit.target || '',
-                    sourceLanguage: parsed.sourceLanguage,
-                    targetLanguage: parsed.targetLanguage
-                }));
-                await storage.storeTranslations(translations);
-                vscode.window.showInformationMessage(`Successfully imported ${translations.length} translations as reference`);
+                const controller = XlfController_1.XliffController.getInstance();
+                await controller.importTranslations(fileUri[0], context);
             }
             catch (error) {
-                vscode.window.showErrorMessage(`Failed to import reference: ${error instanceof Error ? error.message : String(error)}`);
+                // Error is already handled in importTranslations
             }
         }
     });
     let clearCommand = vscode.commands.registerCommand('xlf-editor.clearReferences', async () => {
+        const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
+        const parser = new XlfParser_1.XliffParser();
         const result = await vscode.window.showWarningMessage('Are you sure you want to clear all reference translations?', 'Yes', 'No');
         if (result === 'Yes') {
             await storage.clearStoredTranslations();
@@ -160,6 +161,8 @@ function activate(context) {
         }
     });
     let showStoredCommand = vscode.commands.registerCommand('xlf-editor.showStoredTranslations', async () => {
+        const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
+        const parser = new XlfParser_1.XliffParser();
         const translations = await storage.getStoredTranslations();
         if (translations.length === 0) {
             vscode.window.showInformationMessage('No stored translations found');
@@ -178,7 +181,98 @@ function activate(context) {
         });
         output.show();
     });
-    context.subscriptions.push(openXlfCommand, importCommand, clearCommand, showStoredCommand);
+    let pretranslateCommand = vscode.commands.registerCommand('xlf-editor.pretranslate', async () => {
+        const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
+        const parser = new XlfParser_1.XliffParser();
+        const fileUri = await vscode.window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            filters: { 'XLF files': ['xlf'] }
+        });
+        if (!fileUri || !fileUri[0])
+            return;
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "Pre-translating XLF file...",
+            cancellable: false
+        }, async (progress) => {
+            const config = vscode.workspace.getConfiguration('xlfEditor');
+            const minPercent = config.get('pretranslateMinPercent', 80);
+            const content = await vscode.workspace.fs.readFile(fileUri[0]);
+            const parsed = await parser.parseContent(content.toString());
+            const dbTranslations = await storage.getStoredTranslations();
+            let changed = false;
+            const results = [];
+            for (const unit of parsed.transUnits) {
+                let bestMatch;
+                let bestPercent = 0;
+                for (const db of dbTranslations) {
+                    const percent = (0, similarity_1.similarity)(unit.source, db.source);
+                    if (percent > bestPercent) {
+                        bestPercent = percent;
+                        bestMatch = db;
+                    }
+                }
+                if (bestMatch && bestPercent >= minPercent && !unit.target) {
+                    unit.target = bestMatch.target;
+                    changed = true;
+                }
+                // For test: collect percent for each line
+                results.push({
+                    id: unit.id,
+                    source: unit.source,
+                    target: bestMatch ? bestMatch.target : '',
+                    percent: Math.round(bestPercent)
+                });
+            }
+            if (changed) {
+                // Save the updated file (overwrite)
+                const builder = require('xml2js').Builder;
+                const xmlBuilder = new builder({
+                    xmldec: { version: '1.0', encoding: 'utf-8' },
+                    renderOpts: { pretty: true, indent: '  ' },
+                    cdata: false
+                });
+                // Reconstruct the XLF structure as in your parser
+                const file = {
+                    xliff: {
+                        $: { version: '1.2' },
+                        file: {
+                            $: {
+                                'source-language': parsed.sourceLanguage,
+                                'target-language': parsed.targetLanguage
+                            },
+                            body: {
+                                group: {
+                                    'trans-unit': parsed.transUnits.map(unit => ({
+                                        $: { id: unit.id },
+                                        source: { _: unit.source },
+                                        target: { _: unit.target || '' }
+                                    }))
+                                }
+                            }
+                        }
+                    }
+                };
+                const updatedXml = xmlBuilder.buildObject(file);
+                await vscode.workspace.fs.writeFile(fileUri[0], Buffer.from(updatedXml));
+                vscode.window.showInformationMessage('Pre-translation complete.');
+            }
+            else {
+                vscode.window.showInformationMessage('No matches found for pre-translation.');
+            }
+            // Show results in output for test purposes
+            const output = vscode.window.createOutputChannel('XLF Pre-Translation');
+            output.clear();
+            output.appendLine('Pre-translation results (percent match per line):');
+            results.forEach(r => {
+                output.appendLine(`[${r.id}] ${r.percent}% | Source: ${r.source} | Target: ${r.target}`);
+            });
+            output.show();
+        });
+    });
+    context.subscriptions.push(openXlfCommand, importCommand, clearCommand, showStoredCommand, pretranslateCommand);
 }
 function deactivate() { }
 //# sourceMappingURL=extension.js.map

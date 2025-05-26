@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
 import { XliffParser } from '../utils/XlfParser';
+import { TransUnit } from '../extension';
 import { XliffUpdater } from '../utils/XlfUpdater';
+import { similarity } from '../utils/similarity';
+import { TranslationStorage } from '../Database/TranslationStorage';
+import * as xml2js from 'xml2js';
 
 export class XliffController {
     private static instance: XliffController;
@@ -33,7 +37,7 @@ export class XliffController {
         }
     }
 
-    async handleTranslationUpdate(document: vscode.TextDocument, changes: Array<{id: string, value: string}>): Promise<void> {
+    async handleTranslationUpdate(document: vscode.TextDocument, changes: Array<{ id: string, value: string }>): Promise<void> {
         if (this.updating) return;
 
         this.updating = true;
@@ -42,5 +46,172 @@ export class XliffController {
         } finally {
             this.updating = false;
         }
+    }
+
+    async pretranslate(document: vscode.TextDocument, context: vscode.ExtensionContext): Promise<any> {
+        const storage = TranslationStorage.getInstance(context);
+        const dbTranslations = await storage.getStoredTranslations();
+        
+        // If no translations stored, exit early
+        if (!dbTranslations.length) {
+            return this.parser.parseContent(document.getText());
+        }
+
+        const config = vscode.workspace.getConfiguration('xlfEditor');
+        const minPercent = config.get<number>('pretranslateMinPercent', 80);
+        const parsed = await this.parser.parseContent(document.getText());
+
+        // Get translations only for matching source language
+        const relevantTranslations = dbTranslations.filter(t => 
+            t.sourceLanguage === parsed.sourceLanguage && 
+            t.targetLanguage === parsed.targetLanguage
+        );
+
+        if (!relevantTranslations.length) {
+            vscode.window.showInformationMessage(
+                `No translations found for ${parsed.sourceLanguage} → ${parsed.targetLanguage}`
+            );
+            return parsed;
+        }
+
+        // Process in batches for better responsiveness
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < parsed.transUnits.length; i += BATCH_SIZE) {
+            const batch = parsed.transUnits.slice(i, i + BATCH_SIZE);
+            await new Promise(resolve => setTimeout(resolve, 0)); // Allow UI updates
+
+            for (const unit of batch) {
+                if (unit.target) continue; // Skip already translated units
+
+                let bestMatch;
+                let bestPercent = 0;
+
+                // Only compare with translations that match our language pair
+                for (const db of relevantTranslations) {
+                    const percent = similarity(unit.source, db.source);
+                    if (percent > bestPercent) {
+                        bestPercent = percent;
+                        bestMatch = db;
+                    }
+                    if (percent === 100) break; // Perfect match found, stop searching
+                }
+
+                unit.matchPercent = Math.round(bestPercent);
+                if (bestMatch && bestPercent >= minPercent) {
+                    unit.target = bestMatch.target;
+                }
+            }
+        }
+
+        return parsed;
+    }
+
+    async clearTranslations(document: vscode.TextDocument): Promise<any> {
+        const parsed = await this.parser.parseContent(document.getText());
+        
+        // Clear only target translations, preserve notes and other data
+        parsed.transUnits.forEach((unit: TransUnit) => {
+            // Clear only the target and match percent
+            unit.target = '';
+            unit.matchPercent = undefined;
+            // Keep unit.source and unit.notes unchanged
+        });
+
+        // Update the document, preserving all other data
+        const builder = new xml2js.Builder({
+            xmldec: { version: '1.0', encoding: 'utf-8' },
+            renderOpts: { pretty: true, indent: '  ' },
+            cdata: false
+        });
+
+        const file = {
+            xliff: {
+                $: { version: '1.2' },
+                file: {
+                    $: {
+                        'source-language': parsed.sourceLanguage,
+                        'target-language': parsed.targetLanguage
+                    },
+                    body: {
+                        group: {
+                            'trans-unit': parsed.transUnits.map((unit: TransUnit) => ({
+                                $: { id: unit.id },
+                                source: { _: unit.source },
+                                target: { _: '' },
+                                note: unit.notes?.map(note => ({
+                                    $: {
+                                        from: note.from,
+                                        priority: note.priority
+                                    },
+                                    _: note.content
+                                }))
+                            }))
+                        }
+                    }
+                }
+            }
+        };
+
+        const updatedXml = builder.buildObject(file);
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(
+            document.uri,
+            new vscode.Range(0, 0, document.lineCount, 0),
+            updatedXml
+        );
+
+        await vscode.workspace.applyEdit(edit);
+        return parsed;
+    }
+
+    async importTranslations(fileUri: vscode.Uri, context: vscode.ExtensionContext): Promise<void> {
+        const storage = TranslationStorage.getInstance(context);
+        const BATCH_SIZE = 100; // Process 100 translations at a time
+        
+        return vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "Importing translations...",
+            cancellable: false
+        }, async (progress) => {
+            try {
+                const content = await vscode.workspace.fs.readFile(fileUri);
+                const parsed = await this.parser.parseContent(content.toString());
+                
+                const totalUnits = parsed.transUnits.length;
+                let processed = 0;
+                
+                // Process in batches
+                for (let i = 0; i < parsed.transUnits.length; i += BATCH_SIZE) {
+                    const batch = parsed.transUnits.slice(i, Math.min(i + BATCH_SIZE, totalUnits));
+                    
+                    const translations = batch.map((unit: TransUnit) => ({
+                        id: unit.id,
+                        source: unit.source,
+                        target: unit.target || '',
+                        sourceLanguage: parsed.sourceLanguage,
+                        targetLanguage: parsed.targetLanguage
+                    }));
+
+                    await storage.storeTranslations(translations);
+                    
+                    processed += batch.length;
+                    progress.report({ 
+                        message: `Imported ${processed} of ${totalUnits} translations`,
+                        increment: (batch.length / totalUnits) * 100
+                    });
+
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+
+                vscode.window.showInformationMessage(
+                    `Successfully imported ${totalUnits} translations as reference`
+                );
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `Failed to import reference: ${error instanceof Error ? error.message : String(error)}`
+                );
+                throw error;
+            }
+        });
     }
 }

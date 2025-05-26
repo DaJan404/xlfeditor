@@ -175,6 +175,8 @@ export class WebView {
         </head>
         <body>
             <div class="header-actions">
+                <button id="clearButton" class="save-button">Clear All</button>
+                <button id="pretranslateButton" class="save-button">Pre-translate</button>
                 <button id="saveButton" class="save-button" disabled>Save Changes</button>
             </div>
             <div class="filter-bar">
@@ -201,6 +203,8 @@ export class WebView {
                 </table>
             </div>
             <script>
+                console.log('Webview script loaded');
+
                 const vscode = acquireVsCodeApi();
                 let hasUnsavedChanges = false;
                 let currentData = null;
@@ -216,6 +220,7 @@ export class WebView {
 
                 window.addEventListener('message', event => {
                     const message = event.data;
+                    console.log('Webview received message:', message);
                     switch (message.type) {
                         case 'update':
                             updateContent(message.content);
@@ -225,6 +230,14 @@ export class WebView {
                             break;
                     }
                 });
+
+                const pretranslateBtn = document.getElementById('pretranslateButton');
+                if (!pretranslateBtn.hasListener) {
+                    pretranslateBtn.hasListener = true;
+                    pretranslateBtn.addEventListener('click', () => {
+                        vscode.postMessage({ type: 'pretranslate' });
+                    });
+                }
 
                 function updateContent(data) {
                     currentData = data;  // Store the current data
@@ -243,12 +256,12 @@ export class WebView {
                     translationHeader.textContent = \`Translation (\${data.transUnits.length})\`;
 
                     data.transUnits.forEach((unit, index) => {
+                        const percent = unit.matchPercent !== undefined ? \` (\${unit.matchPercent}%)\` : '';
                         const row = document.createElement('tr');
-                        
                         row.innerHTML = \`
                             <td>
                                 <div class="translation-item">
-                                    <div class="source-text">\${escapeHtml(unit.source)}</div>
+                                    <div class="source-text">\${escapeHtml(unit.source)}\${percent}</div>
                                     \${unit.notes?.length > 0 ? \`
                                         <div class="notes">
                                             \${unit.notes.map(n => {
@@ -301,7 +314,6 @@ export class WebView {
                     filterTranslations();  // Apply initial filtering
                 }
 
-                // Move save button event listener outside the updateContent function
                 if (!document.getElementById('saveButton').hasListener) {
                     document.getElementById('saveButton').hasListener = true;
                     document.getElementById('saveButton').addEventListener('click', () => {
@@ -319,6 +331,18 @@ export class WebView {
                         });
 
                         updateSaveState(false);
+                    });
+                }
+
+                const clearBtn = document.getElementById('clearButton');
+                if (!clearBtn.hasListener) {
+                    clearBtn.hasListener = true;
+                    clearBtn.addEventListener('click', async () => {
+                        const confirmed = await vscode.postMessage({ 
+                            type: 'confirm-clear',
+                            message: 'Are you sure you want to clear all translations?' 
+                        });
+                        // The actual clearing will happen after confirmation
                     });
                 }
 
