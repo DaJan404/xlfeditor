@@ -212,10 +212,47 @@ export class WebView {
                     color: var(--vscode-descriptionForeground);
                     margin-bottom: 4px;
                 }
+                .nav-group {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                    margin-right: 16px;
+                }
+                .nav-button {
+                    padding: 4px 8px;
+                    background-color: var(--vscode-button-secondaryBackground);
+                    color: var(--vscode-button-secondaryForeground);
+                    border: none;
+                    border-radius: 2px;
+                    cursor: pointer;
+                    font-family: var(--vscode-font-family);
+                    font-size: var(--vscode-font-size);
+                }
+                .nav-button:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+                .match-counter {
+                    color: var(--vscode-descriptionForeground);
+                    font-size: 12px;
+                    min-width: 40px;
+                    text-align: center;
+                }
+                tr.has-matches {
+                    background-color: var(--vscode-editor-findMatchHighlightBackground);
+                }
+                tr.selected-match {
+                    background-color: var(--vscode-editor-findMatchBackground);
+                }
             </style>
         </head>
         <body>
             <div class="header-actions">
+                <div class="nav-group">
+                    <button id="prevMatchButton" class="nav-button" title="Previous Match (Alt+Up)" disabled>▲</button>
+                    <span id="matchCounter" class="match-counter">0/0</span>
+                    <button id="nextMatchButton" class="nav-button" title="Next Match (Alt+Down)" disabled>▼</button>
+                </div>
                 <button id="clearButton" class="save-button">Clear All</button>
                 <button id="pretranslateButton" class="save-button">Pre-translate</button>
                 <button id="saveButton" class="save-button" disabled>Save Changes</button>
@@ -286,6 +323,41 @@ export class WebView {
                     vscode.setState(state);
                 });
 
+                let currentMatchIndex = -1;
+                const matchedRows = [];
+
+                function updateNavigationButtons() {
+                    const prevBtn = document.getElementById('prevMatchButton');
+                    const nextBtn = document.getElementById('nextMatchButton');
+                    const counter = document.getElementById('matchCounter');
+                    
+                    prevBtn.disabled = matchedRows.length === 0 || currentMatchIndex <= 0;
+                    nextBtn.disabled = matchedRows.length === 0 || currentMatchIndex >= matchedRows.length - 1;
+                    
+                    counter.textContent = matchedRows.length > 0 
+                        ? \`\${currentMatchIndex + 1}/\${matchedRows.length}\`
+                        : '0/0';
+
+                    document.querySelectorAll('tr.selected-match').forEach(row => 
+                        row.classList.remove('selected-match')
+                    );
+                    
+                    if (currentMatchIndex >= 0 && currentMatchIndex < matchedRows.length) {
+                        matchedRows[currentMatchIndex].classList.add('selected-match');
+                        matchedRows[currentMatchIndex].scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'center' 
+                        });
+                    }
+                }
+
+                function navigateToMatch(index) {
+                    if (index >= 0 && index < matchedRows.length) {
+                        currentMatchIndex = index;
+                        updateNavigationButtons();
+                    }
+                }
+
                 function updateContent(data) {
                     currentData = data;  // Store the current data
                     const tbody = document.getElementById('translationRows');
@@ -352,8 +424,16 @@ export class WebView {
                             </td>
                         \`.trim();
                         
+                        if (unit.possibleMatches?.length > 1) {
+                            row.classList.add('has-matches');
+                            matchedRows.push(row);
+                        }
+                        
                         tbody.appendChild(row);
                     });
+
+                    // Initialize navigation after creating rows
+                    matchedRows.length > 0 ? navigateToMatch(0) : updateNavigationButtons();
 
                     // Add event listeners for textareas
                     document.querySelectorAll('textarea').forEach(textarea => {
@@ -438,6 +518,26 @@ export class WebView {
                     });
                 }
 
+                document.getElementById('prevMatchButton').addEventListener('click', () => {
+                    navigateToMatch(currentMatchIndex - 1);
+                });
+
+                document.getElementById('nextMatchButton').addEventListener('click', () => {
+                    navigateToMatch(currentMatchIndex + 1);
+                });
+
+                document.addEventListener('keydown', e => {
+                    if (e.altKey) {
+                        if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            navigateToMatch(currentMatchIndex - 1);
+                        } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            navigateToMatch(currentMatchIndex + 1);
+                        }
+                    }
+                });
+
                 function escapeHtml(unsafe) {
                     if (!unsafe) return '';
                     return unsafe
@@ -486,6 +586,17 @@ export class WebView {
                             visibleCount++;
                         }
                     });
+
+                    // Reset navigation for filtered rows
+                    matchedRows.length = 0;
+                    rows.forEach(row => {
+                        if (!row.classList.contains('hidden') && row.classList.contains('has-matches')) {
+                            matchedRows.push(row);
+                        }
+                    });
+                    
+                    currentMatchIndex = matchedRows.length > 0 ? 0 : -1;
+                    updateNavigationButtons();
 
                     // Update counter
                     const total = rows.length;
