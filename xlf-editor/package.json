@@ -33,7 +33,7 @@
         "title": "Show Stored Translations",
         "category": "XLF Editor"
       },
-       {
+      {
         "command": "xlf-editor.pretranslate",
         "title": "Pre-translate XLF File",
         "category": "XLF Editor"
@@ -61,6 +61,16 @@
           "minimum": 0,
           "maximum": 100,
           "description": "Minimum percent match for pre-translation to apply"
+        },
+        "xlfEditor.preferredTranslationSource": {
+          "type": "string",
+          "enum": [
+            "storage",
+            "file",
+            "ask"
+          ],
+          "default": "ask",
+          "description": "Preferred source for translations when multiple matches are found"
         }
       }
     }

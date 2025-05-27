@@ -169,6 +169,47 @@ class WebView {
                 .hidden {
                     display: none !important;
                 }
+                .translation-container {
+                    position: relative;
+                    width: 100%;
+                }
+                .match-dropdown-btn {
+                    position: absolute;
+                    right: 8px;
+                    top: 8px;
+                    background: var(--vscode-button-secondaryBackground);
+                    color: var(--vscode-button-secondaryForeground);
+                    border: none;
+                    border-radius: 3px;
+                    padding: 4px 8px;
+                    cursor: pointer;
+                    font-size: 12px;
+                }
+                .match-dropdown {
+                    position: absolute;
+                    top: 100%;
+                    left: 0;
+                    right: 0;
+                    background: var(--vscode-dropdown-background);
+                    border: 1px solid var(--vscode-dropdown-border);
+                    border-radius: 3px;
+                    z-index: 10;
+                    max-height: 200px;
+                    overflow-y: auto;
+                }
+                .match-item {
+                    padding: 8px;
+                    cursor: pointer;
+                    border-bottom: 1px solid var(--vscode-dropdown-border);
+                }
+                .match-item:hover {
+                    background: var(--vscode-list-hoverBackground);
+                }
+                .match-header {
+                    font-size: 12px;
+                    color: var(--vscode-descriptionForeground);
+                    margin-bottom: 4px;
+                }
             </style>
         </head>
         <body>
@@ -260,12 +301,13 @@ class WebView {
                     translationHeader.textContent = \`Translation (\${data.transUnits.length})\`;
 
                     data.transUnits.forEach((unit, index) => {
-                        const percent = unit.matchPercent !== undefined ? \` (\${unit.matchPercent}%)\` : '';
                         const row = document.createElement('tr');
+                        const hasMultipleMatches = unit.possibleMatches?.length > 1;
+                        
                         row.innerHTML = \`
                             <td>
                                 <div class="translation-item">
-                                    <div class="source-text">\${escapeHtml(unit.source)}\${percent}</div>
+                                    <div class="source-text">\${escapeHtml(unit.source)}\${unit.matchPercent ? \` (\${unit.matchPercent}%)\` : ''}</div>
                                     \${unit.notes?.length > 0 ? \`
                                         <div class="notes">
                                             \${unit.notes.map(n => {
@@ -283,10 +325,27 @@ class WebView {
                             </td>
                             <td>
                                 <div class="translation-item">
-                                    <textarea 
-                                        data-id="\${escapeHtml(unit.id)}"
-                                        placeholder="Enter translation here..."
-                                    >\${escapeHtml(unit.target || '')}</textarea>
+                                    <div class="translation-container">
+                                        <textarea 
+                                            data-id="\${escapeHtml(unit.id)}"
+                                            placeholder="Enter translation here..."
+                                        >\${escapeHtml(unit.target || '')}</textarea>
+                                        \${hasMultipleMatches ? \`
+                                            <button class="match-dropdown-btn" title="Show translation matches">
+                                                \${unit.possibleMatches.length} matches ▼
+                                            </button>
+                                            <div class="match-dropdown hidden">
+                                                \${unit.possibleMatches.map(match => \`
+                                                    <div class="match-item" data-target="\${escapeHtml(match.target)}">
+                                                        <div class="match-header">
+                                                            \${match.matchPercent}% Match from \${match.origin}
+                                                        </div>
+                                                        <div class="match-content">\${escapeHtml(match.target)}</div>
+                                                    </div>
+                                                \`).join('')}
+                                            </div>
+                                        \` : ''}
+                                    </div>
                                 </div>
                             </td>
                         \`.trim();
@@ -322,6 +381,27 @@ class WebView {
                     if (savedState && savedState.scrollPosition) {
                         window.scrollTo(0, savedState.scrollPosition);
                     }
+
+                    // Add dropdown event handlers
+                    document.querySelectorAll('.match-dropdown-btn').forEach(btn => {
+                        btn.addEventListener('click', e => {
+                            const container = e.target.closest('.translation-container');
+                            const dropdown = container.querySelector('.match-dropdown');
+                            dropdown.classList.toggle('hidden');
+                        });
+                    });
+
+                    document.querySelectorAll('.match-item').forEach(item => {
+                        item.addEventListener('click', e => {
+                            const container = e.target.closest('.translation-container');
+                            const textarea = container.querySelector('textarea');
+                            const dropdown = container.querySelector('.match-dropdown');
+                            textarea.value = e.currentTarget.dataset.target;
+                            autoResizeTextarea(textarea);
+                            updateSaveState(true);
+                            dropdown.classList.add('hidden');
+                        });
+                    });
                 }
 
                 if (!document.getElementById('saveButton').hasListener) {

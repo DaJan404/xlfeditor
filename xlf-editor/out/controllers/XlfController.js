@@ -80,90 +80,129 @@ class XliffController {
     async pretranslate(document, context) {
         return vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
-            title: "Pre-translating XLF file...",
-            cancellable: false
-        }, async (progress) => {
+            title: "Pre-translating...",
+            cancellable: true
+        }, async (progress, token) => {
             try {
                 const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
                 const dbTranslations = await storage.getStoredTranslations();
-                if (!dbTranslations.length) {
-                    vscode.window.showInformationMessage('No translations in storage.');
-                    return;
-                }
                 const parsed = await this.parser.parseContent(document.getText());
-                // Create lookup map for faster source text matching
+                // Create optimized lookup maps with lowercase keys
                 const translationMap = new Map();
+                const existingTranslations = new Map();
+                // Prepare storage translations map (keep only best match per source)
                 for (const t of dbTranslations) {
                     if (t.sourceLanguage === parsed.sourceLanguage &&
                         t.targetLanguage === parsed.targetLanguage) {
                         const key = t.source.toLowerCase();
                         if (!translationMap.has(key)) {
-                            translationMap.set(key, []);
+                            translationMap.set(key, t);
                         }
-                        translationMap.get(key).push(t);
                     }
                 }
-                if (translationMap.size === 0) {
-                    vscode.window.showInformationMessage(`No translations found for ${parsed.sourceLanguage} → ${parsed.targetLanguage}`);
-                    return;
-                }
+                // Prepare existing translations map
+                parsed.transUnits
+                    .filter((unit) => unit.target)
+                    .forEach((unit) => existingTranslations.set(unit.source.toLowerCase(), unit.target));
                 const config = vscode.workspace.getConfiguration('xlfEditor');
                 const minPercent = config.get('pretranslateMinPercent', 80);
-                let changed = false;
-                // Process in larger batches
-                const BATCH_SIZE = 100;
+                const preferredSource = config.get('preferredTranslationSource', 'ask');
+                // Get only untranslated units
                 const untranslatedUnits = parsed.transUnits.filter((unit) => !unit.target);
-                for (let i = 0; i < untranslatedUnits.length; i += BATCH_SIZE) {
-                    const batch = untranslatedUnits.slice(i, Math.min(i + BATCH_SIZE, untranslatedUnits.length));
-                    await Promise.all(batch.map(async (unit) => {
-                        // Quick exact match check first
-                        const exactMatches = translationMap.get(unit.source.toLowerCase());
-                        if (exactMatches?.length) {
-                            unit.target = exactMatches[0].target;
-                            unit.matchPercent = 100;
-                            changed = true;
-                            return;
+                const totalUnits = untranslatedUnits.length;
+                let processedUnits = 0;
+                // Process in larger batches
+                const BATCH_SIZE = 200;
+                const batches = Math.ceil(totalUnits / BATCH_SIZE);
+                // Create arrays for source strings for faster similarity checking
+                const storageKeys = Array.from(translationMap.keys());
+                const existingKeys = Array.from(existingTranslations.keys());
+                for (let batch = 0; batch < batches && !token.isCancellationRequested; batch++) {
+                    const start = batch * BATCH_SIZE;
+                    const end = Math.min(start + BATCH_SIZE, totalUnits);
+                    // Process batch in parallel
+                    await Promise.all(untranslatedUnits.slice(start, end).map(async (unit) => {
+                        const source = unit.source.toLowerCase();
+                        const matches = [];
+                        // Check exact matches first (O(1) operations)
+                        const storageMatch = translationMap.get(source);
+                        const fileMatch = existingTranslations.get(source);
+                        if (storageMatch) {
+                            matches.push({
+                                source: unit.source,
+                                target: storageMatch.target,
+                                matchPercent: 100,
+                                origin: 'storage'
+                            });
                         }
-                        // If no exact match, try similarity matching
-                        let bestMatch;
-                        let bestPercent = 0;
-                        for (const [source, translations] of translationMap) {
-                            const percent = (0, similarity_1.similarity)(unit.source.toLowerCase(), source);
-                            if (percent > bestPercent) {
-                                bestPercent = percent;
-                                bestMatch = translations[0];
+                        if (fileMatch) {
+                            matches.push({
+                                source: unit.source,
+                                target: fileMatch,
+                                matchPercent: 100,
+                                origin: 'file'
+                            });
+                        }
+                        // Only check for similar matches if no exact matches found
+                        if (matches.length === 0) {
+                            // Use length difference as early filter
+                            const sourceLen = source.length;
+                            const lenThreshold = sourceLen * 0.3; // 30% length difference max
+                            // Find similar matches from storage
+                            for (const key of storageKeys) {
+                                if (Math.abs(key.length - sourceLen) <= lenThreshold) {
+                                    const percent = (0, similarity_1.similarity)(source, key);
+                                    if (percent >= minPercent) {
+                                        const match = translationMap.get(key);
+                                        matches.push({
+                                            source: match.source,
+                                            target: match.target,
+                                            matchPercent: Math.round(percent),
+                                            origin: 'storage'
+                                        });
+                                    }
+                                }
                             }
-                            if (percent === 100)
-                                break;
+                            // Find similar matches from existing translations
+                            for (const key of existingKeys) {
+                                if (Math.abs(key.length - sourceLen) <= lenThreshold) {
+                                    const percent = (0, similarity_1.similarity)(source, key);
+                                    if (percent >= minPercent) {
+                                        matches.push({
+                                            source: key,
+                                            target: existingTranslations.get(key),
+                                            matchPercent: Math.round(percent),
+                                            origin: 'file'
+                                        });
+                                    }
+                                }
+                            }
                         }
-                        if (bestMatch && bestPercent >= minPercent) {
-                            unit.target = bestMatch.target;
-                            changed = true;
+                        if (matches.length > 0) {
+                            matches.sort((a, b) => b.matchPercent - a.matchPercent);
+                            if (matches.length === 1 || preferredSource !== 'ask') {
+                                const selectedMatch = preferredSource === 'file'
+                                    ? matches.find(m => m.origin === 'file') ?? matches[0]
+                                    : matches[0];
+                                unit.target = selectedMatch.target;
+                                unit.matchPercent = selectedMatch.matchPercent;
+                            }
+                            else {
+                                unit.possibleMatches = matches.slice(0, 5); // Limit to top 5 matches
+                            }
                         }
-                        unit.matchPercent = Math.round(bestPercent);
                     }));
+                    processedUnits += end - start;
                     progress.report({
-                        message: `Processed ${Math.min((i + BATCH_SIZE), untranslatedUnits.length)} of ${untranslatedUnits.length} units`,
-                        increment: (BATCH_SIZE / untranslatedUnits.length) * 100
+                        message: `Processed ${processedUnits} of ${totalUnits} units`,
+                        increment: (BATCH_SIZE / totalUnits) * 100
                     });
                 }
-                if (changed) {
-                    const changes = parsed.transUnits
-                        .filter((unit) => unit.target)
-                        .map((unit) => ({
-                        id: unit.id,
-                        value: unit.target
-                    }));
-                    await this.updater.updateTranslations(document, changes);
-                    // Return the updated content for the webview to display
-                    const updatedContent = await this.parser.parseContent(document.getText());
-                    vscode.window.showInformationMessage('Pre-translation complete.');
-                    return updatedContent;
-                }
-                else {
-                    vscode.window.showInformationMessage('No matches found for pre-translation.');
+                if (token.isCancellationRequested) {
+                    vscode.window.showInformationMessage('Pre-translation cancelled');
                     return parsed;
                 }
+                return parsed;
             }
             catch (error) {
                 console.error('Error in pretranslate:', error);
