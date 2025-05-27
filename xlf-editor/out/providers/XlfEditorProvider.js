@@ -88,8 +88,16 @@ class XlfEditorProvider {
                     }
                     break;
                 case 'pretranslate':
-                    const result = await this.xliffController.pretranslate(document, this.context);
-                    webviewPanel.webview.postMessage({ type: 'update', content: result });
+                    try {
+                        const result = await this.xliffController.pretranslate(document, this.context);
+                        if (result) {
+                            // Update the webview with new content
+                            webviewPanel.webview.postMessage({ type: 'update', content: result });
+                        }
+                    }
+                    catch (error) {
+                        vscode.window.showErrorMessage('Failed to pre-translate: ' + (error instanceof Error ? error.message : String(error)));
+                    }
                     break;
                 case 'saved':
                     webviewPanel.webview.postMessage({ type: 'close' });

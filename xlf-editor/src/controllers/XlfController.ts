@@ -49,7 +49,7 @@ export class XliffController {
         }
     }
 
-    async pretranslate(document: vscode.TextDocument, context: vscode.ExtensionContext): Promise<void> {
+    async pretranslate(document: vscode.TextDocument, context: vscode.ExtensionContext): Promise<any> {
         return vscode.window.withProgress({
             location: vscode.ProgressLocation.Notification,
             title: "Pre-translating XLF file...",
@@ -142,9 +142,14 @@ export class XliffController {
                         }));
 
                     await this.updater.updateTranslations(document, changes);
+                    
+                    // Return the updated content for the webview to display
+                    const updatedContent = await this.parser.parseContent(document.getText());
                     vscode.window.showInformationMessage('Pre-translation complete.');
+                    return updatedContent;
                 } else {
                     vscode.window.showInformationMessage('No matches found for pre-translation.');
+                    return parsed;
                 }
             } catch (error) {
                 console.error('Error in pretranslate:', error);
