@@ -66,13 +66,20 @@ export class XliffController {
 
                 const parsed = await this.parser.parseContent(document.getText());
                 
-                // Get translations only for matching source language
-                const relevantTranslations = dbTranslations.filter(t => 
-                    t.sourceLanguage === parsed.sourceLanguage && 
-                    t.targetLanguage === parsed.targetLanguage
-                );
+                // Create lookup map for faster source text matching
+                const translationMap = new Map<string, StoredTranslation[]>();
+                for (const t of dbTranslations) {
+                    if (t.sourceLanguage === parsed.sourceLanguage && 
+                        t.targetLanguage === parsed.targetLanguage) {
+                        const key = t.source.toLowerCase();
+                        if (!translationMap.has(key)) {
+                            translationMap.set(key, []);
+                        }
+                        translationMap.get(key)!.push(t);
+                    }
+                }
 
-                if (!relevantTranslations.length) {
+                if (translationMap.size === 0) {
                     vscode.window.showInformationMessage(
                         `No translations found for ${parsed.sourceLanguage} → ${parsed.targetLanguage}`
                     );
@@ -83,22 +90,32 @@ export class XliffController {
                 const minPercent = config.get<number>('pretranslateMinPercent', 80);
                 let changed = false;
 
-                // Process in batches
-                const BATCH_SIZE = 25;
-                for (let i = 0; i < parsed.transUnits.length; i += BATCH_SIZE) {
-                    const batch = parsed.transUnits.slice(i, Math.min(i + parsed.transUnits.length, i + BATCH_SIZE));
+                // Process in larger batches
+                const BATCH_SIZE = 100;
+                const untranslatedUnits = parsed.transUnits.filter((unit: TransUnit) => !unit.target);
+                
+                for (let i = 0; i < untranslatedUnits.length; i += BATCH_SIZE) {
+                    const batch = untranslatedUnits.slice(i, Math.min(i + BATCH_SIZE, untranslatedUnits.length));
                     
-                    for (const unit of batch) {
-                        if (unit.target) continue; // Skip already translated units
+                    await Promise.all(batch.map(async (unit: TransUnit) => {
+                        // Quick exact match check first
+                        const exactMatches = translationMap.get(unit.source.toLowerCase());
+                        if (exactMatches?.length) {
+                            unit.target = exactMatches[0].target;
+                            unit.matchPercent = 100;
+                            changed = true;
+                            return;
+                        }
 
+                        // If no exact match, try similarity matching
                         let bestMatch: StoredTranslation | undefined;
                         let bestPercent = 0;
 
-                        for (const db of relevantTranslations) {
-                            const percent = similarity(unit.source, db.source);
+                        for (const [source, translations] of translationMap) {
+                            const percent = similarity(unit.source.toLowerCase(), source);
                             if (percent > bestPercent) {
                                 bestPercent = percent;
-                                bestMatch = db;
+                                bestMatch = translations[0];
                             }
                             if (percent === 100) break;
                         }
@@ -108,16 +125,15 @@ export class XliffController {
                             changed = true;
                         }
                         unit.matchPercent = Math.round(bestPercent);
-                    }
+                    }));
 
                     progress.report({ 
-                        message: `Processed ${Math.min((i + BATCH_SIZE), parsed.transUnits.length)} of ${parsed.transUnits.length} units`,
-                        increment: (BATCH_SIZE / parsed.transUnits.length) * 100
+                        message: `Processed ${Math.min((i + BATCH_SIZE), untranslatedUnits.length)} of ${untranslatedUnits.length} units`,
+                        increment: (BATCH_SIZE / untranslatedUnits.length) * 100
                     });
                 }
 
                 if (changed) {
-                    // Update the document using XliffUpdater
                     const changes = parsed.transUnits
                         .filter((unit: TransUnit) => unit.target)
                         .map((unit: TransUnit) => ({
