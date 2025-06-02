@@ -86,7 +86,7 @@ class TranslationStorage {
             // Write to file
             await fs.promises.writeFile(this.dbPath, JSON.stringify(this.cachedTranslations, null, 2), 'utf8');
         }
-        catch (error) { // Add type annotation here
+        catch (error) {
             console.error('Error storing translations:', error);
             throw new Error('Failed to store translations: ' +
                 (error instanceof Error ? error.message : String(error)));
@@ -99,7 +99,7 @@ class TranslationStorage {
                 await fs.promises.unlink(this.dbPath);
             }
         }
-        catch (error) { // Add type annotation here
+        catch (error) {
             console.error('Error clearing translations:', error);
             throw error instanceof Error ? error : new Error(String(error));
         }

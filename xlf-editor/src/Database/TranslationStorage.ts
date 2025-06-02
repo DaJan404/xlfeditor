@@ -73,7 +73,7 @@ export class TranslationStorage {
                 JSON.stringify(this.cachedTranslations, null, 2),
                 'utf8'
             );
-        } catch (error: unknown) { // Add type annotation here
+        } catch (error: unknown) {
             console.error('Error storing translations:', error);
             throw new Error(
                 'Failed to store translations: ' + 
@@ -88,7 +88,7 @@ export class TranslationStorage {
             if (fs.existsSync(this.dbPath)) {
                 await fs.promises.unlink(this.dbPath);
             }
-        } catch (error: unknown) { // Add type annotation here
+        } catch (error: unknown) {
             console.error('Error clearing translations:', error);
             throw error instanceof Error ? error : new Error(String(error));
         }
