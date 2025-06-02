@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { XlfEditorProvider } from './providers/XlfEditorProvider';
-import { StoredTranslation, TranslationStorage } from './Database/TranslationStorage';
-import { similarity } from './utils/similarity';
+import { TranslationStorage } from './Database/TranslationStorage';
 import { XliffParser } from './utils/XlfParser';
 import { XliffController } from './controllers/XlfController';
 
@@ -37,8 +36,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register custom editor provider
     context.subscriptions.push(XlfEditorProvider.register(context));
-
-
 
     //check for existing language files
     async function getExistingLanguages(originalPath: string): Promise<string[]> {

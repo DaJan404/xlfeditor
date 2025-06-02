@@ -57,7 +57,7 @@
       "properties": {
         "xlfEditor.pretranslateMinPercent": {
           "type": "number",
-          "default": 80,
+          "default": 100,
           "minimum": 0,
           "maximum": 100,
           "description": "Minimum percent match for pre-translation to apply"
