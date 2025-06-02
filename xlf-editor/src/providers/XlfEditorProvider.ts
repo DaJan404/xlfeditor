@@ -69,8 +69,12 @@ export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
                     try {
                         const result = await this.xliffController.pretranslate(document, this.context);
                         if (result) {
-                            // Update the webview with new content
-                            webviewPanel.webview.postMessage({ type: 'update', content: result });
+                            // Update the webview with new content and enable save button
+                            webviewPanel.webview.postMessage({ 
+                                type: 'update', 
+                                content: result,
+                                enableSave: true // Add this flag
+                            });
                         }
                     } catch (error) {
                         vscode.window.showErrorMessage(

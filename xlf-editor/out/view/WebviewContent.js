@@ -242,6 +242,13 @@ class WebView {
                 tr.selected-match {
                     background-color: var(--vscode-editor-findMatchBackground);
                 }
+                tr[style*="background-color"] {
+                    transition: background-color 0.2s;
+                }
+                tr[style*="background-color"]:hover {
+                    background-color: var(--vscode-editorWarning-foreground) !important;
+                    opacity: 0.7;
+                }
             </style>
         </head>
         <body>
@@ -262,6 +269,7 @@ class WebView {
                         <option value="all">All</option>
                         <option value="untranslated">Untranslated Only</option>
                         <option value="translated">Translated Only</option>
+                        <option value="duplicates">Different Translations</option>
                     </select>
                     <span id="filterCount" class="filter-count"></span>
                 </div>
@@ -301,6 +309,10 @@ class WebView {
                     switch (message.type) {
                         case 'update':
                             updateContent(message.content);
+                            // Enable save button if the update comes from pre-translate
+                            if (message.enableSave) {
+                                updateSaveState(true);
+                            }
                             break;
                         case 'saved':
                             updateSaveState(false);
@@ -557,6 +569,21 @@ class WebView {
                     const rows = document.querySelectorAll('#translationRows tr');
                     let visibleCount = 0;
 
+                    // Create map for duplicate detection
+                    const sourceMap = new Map();
+                    if (filterType === 'duplicates') {
+                        rows.forEach(row => {
+                            const sourceText = row.querySelector('.source-text').textContent.toLowerCase();
+                            const translationText = row.querySelector('textarea').value.trim();
+                            if (translationText) {
+                                if (!sourceMap.has(sourceText)) {
+                                    sourceMap.set(sourceText, new Set());
+                                }
+                                sourceMap.get(sourceText).add(translationText);
+                            }
+                        });
+                    }
+
                     rows.forEach(row => {
                         const sourceText = row.querySelector('.source-text').textContent.toLowerCase();
                         const translationText = row.querySelector('textarea').value.toLowerCase();
@@ -570,12 +597,27 @@ class WebView {
                                 translationText.includes(searchTerm);
                         }
 
-                        // Filter by translation status
+                        // Filter by type
                         if (show && filterType !== 'all') {
-                            if (filterType === 'untranslated' && isTranslated) {
-                                show = false;
-                            } else if (filterType === 'translated' && !isTranslated) {
-                                show = false;
+                            switch (filterType) {
+                                case 'untranslated':
+                                    show = !isTranslated;
+                                    break;
+                                case 'translated':
+                                    show = isTranslated;
+                                    break;
+                                case 'duplicates':
+                                    // Show only if source text has multiple different translations
+                                    show = sourceMap.has(sourceText) && 
+                                           sourceMap.get(sourceText).size > 1 &&
+                                           isTranslated;
+                                    // Highlight rows with same source
+                                    if (show) {
+                                        row.style.backgroundColor = 'var(--vscode-editorWarning-background)';
+                                    } else {
+                                        row.style.backgroundColor = '';
+                                    }
+                                    break;
                             }
                         }
 
@@ -596,10 +638,15 @@ class WebView {
                     currentMatchIndex = matchedRows.length > 0 ? 0 : -1;
                     updateNavigationButtons();
 
-                    // Update counter
+                    // Update counter and add info about duplicates
                     const total = rows.length;
-                    document.getElementById('filterCount').textContent = 
-                        \`Showing \${visibleCount} of \${total} items\`;
+                    let countText = \`Showing \${visibleCount} of \${total} items\`;
+                    if (filterType === 'duplicates') {
+                        const duplicateSources = Array.from(sourceMap.entries())
+                            .filter(([_, translations]) => translations.size > 1).length;
+                        countText += \` (\${duplicateSources} sources with different translations)\`;
+                    }
+                    document.getElementById('filterCount').textContent = countText;
                 }
             </script>
         </body>

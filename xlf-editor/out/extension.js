@@ -63,15 +63,16 @@ function activate(context) {
     }
     //openXlf command
     let openXlfCommand = vscode.commands.registerCommand('xlf-editor.openXlf', async () => {
-        const storage = TranslationStorage_1.TranslationStorage.getInstance(context);
-        const parser = new XlfParser_1.XliffParser();
         const fileUri = await vscode.window.showOpenDialog({
             canSelectFiles: true,
             canSelectFolders: false,
             canSelectMany: false,
             filters: {
                 'XLF files': ['xlf']
-            }
+            },
+            openLabel: 'Open XLF',
+            defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri,
+            title: 'Select XLF File'
         });
         if (fileUri && fileUri[0]) {
             const filename = fileUri[0].fsPath;
@@ -79,10 +80,11 @@ function activate(context) {
             if (!filename.match(/\.[a-z]{2}-[A-Z]{2}\.xlf$/)) {
                 // Get existing language files
                 const existingLanguages = await getExistingLanguages(filename);
-                // Filter out languages that already exist
                 const availableLanguages = SUPPORTED_LANGUAGES.filter(lang => !existingLanguages.includes(lang.id));
                 if (availableLanguages.length === 0) {
                     vscode.window.showInformationMessage('Translation files for all supported languages already exist.');
+                    // Open the original file only
+                    await vscode.commands.executeCommand('vscode.openWith', fileUri[0], 'xlf-editor.translator');
                     return;
                 }
                 const language = await vscode.window.showQuickPick(availableLanguages.map(lang => ({
@@ -116,7 +118,7 @@ function activate(context) {
                             }
                             // Write new file
                             await vscode.workspace.fs.writeFile(newUri, Buffer.from(xmlContent));
-                            // Open the new file
+                            // Open only the new file
                             await vscode.commands.executeCommand('vscode.openWith', newUri, 'xlf-editor.translator');
                             vscode.window.showInformationMessage(`Created ${language.label} translation file`);
                             return;
@@ -125,9 +127,10 @@ function activate(context) {
                             vscode.window.showErrorMessage(`Failed to create language copy: ${error instanceof Error ? error.message : String(error)}`);
                         }
                     });
+                    return; // Add return here to prevent opening original file
                 }
             }
-            // Open  original file if no copy was created
+            // Only open original file if no language was selected or if it's a language-specific file
             await vscode.commands.executeCommand('vscode.openWith', fileUri[0], 'xlf-editor.translator');
         }
     });

@@ -71,7 +71,7 @@ export class XliffController {
                 const dbTranslations = await storage.getStoredTranslations();
                 const parsed = await this.parser.parseContent(document.getText());
                 
-                // Create optimized lookup maps with lowercase keys
+                // Lookup maps with lowercase keys
                 const translationMap = new Map<string, StoredTranslation>();
                 const existingTranslations = new Map<string, string>();
 

@@ -53,17 +53,16 @@ export function activate(context: vscode.ExtensionContext) {
 
     //openXlf command
     let openXlfCommand = vscode.commands.registerCommand('xlf-editor.openXlf', async () => {
-
-        const storage = TranslationStorage.getInstance(context);
-        const parser = new XliffParser();
-
         const fileUri = await vscode.window.showOpenDialog({
             canSelectFiles: true,
             canSelectFolders: false,
             canSelectMany: false,
             filters: {
                 'XLF files': ['xlf']
-            }
+            },
+            openLabel: 'Open XLF',
+            defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri,
+            title: 'Select XLF File'
         });
 
         if (fileUri && fileUri[0]) {
@@ -73,8 +72,6 @@ export function activate(context: vscode.ExtensionContext) {
             if (!filename.match(/\.[a-z]{2}-[A-Z]{2}\.xlf$/)) {
                 // Get existing language files
                 const existingLanguages = await getExistingLanguages(filename);
-
-                // Filter out languages that already exist
                 const availableLanguages = SUPPORTED_LANGUAGES.filter(
                     lang => !existingLanguages.includes(lang.id)
                 );
@@ -83,6 +80,8 @@ export function activate(context: vscode.ExtensionContext) {
                     vscode.window.showInformationMessage(
                         'Translation files for all supported languages already exist.'
                     );
+                    // Open the original file only
+                    await vscode.commands.executeCommand('vscode.openWith', fileUri[0], 'xlf-editor.translator');
                     return;
                 }
 
@@ -138,7 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
                                 Buffer.from(xmlContent)
                             );
 
-                            // Open the new file
+                            // Open only the new file
                             await vscode.commands.executeCommand(
                                 'vscode.openWith',
                                 newUri,
@@ -155,10 +154,11 @@ export function activate(context: vscode.ExtensionContext) {
                             );
                         }
                     });
+                    return; // Add return here to prevent opening original file
                 }
             }
 
-            // Open  original file if no copy was created
+            // Only open original file if no language was selected or if it's a language-specific file
             await vscode.commands.executeCommand('vscode.openWith', fileUri[0], 'xlf-editor.translator');
         }
     });
