@@ -115,4 +115,11 @@ Contributions are welcome! Please see the [VS Code Extension Guidelines](https:/
 
 ---
 
+## License
+
+This project is proprietary and all rights are reserved.  
+See the [LICENSE](/LICENSE.md) file for details.
+
+---
+
 **Enjoy translating with XLF Editor!**
