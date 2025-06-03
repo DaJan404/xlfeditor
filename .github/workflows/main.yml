@@ -66,6 +66,14 @@ jobs:
         cd xlf-editor
         npm version ${{ github.event.inputs.version_type }} --no-git-tag-version
 
+    - name: Commit version bump
+      if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
+      run: |
+        cd xlf-editor
+        git add package.json package-lock.json
+        git commit -m "Bump version to $(node -p "require('./package.json').version") [skip ci]"
+        git push
+
     - name: Auto-Increment Version and Package Extension
       if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
       run: |
