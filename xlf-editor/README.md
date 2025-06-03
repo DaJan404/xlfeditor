@@ -27,19 +27,19 @@
 
 ### Main Editor View
 
-![Main Editor View](images/editor-view.png)
+![Main Editor View](./images/editor-view.png)
 
 ### Show Translation Storage
 
-![Translation Storage](images/translation-storage.png)
+![Translation Storage](./images/translation-storage.png)
 
 ### Pre-Translation in Action
 
-![Pre-Translation](images/pretranslate.gif)
+![Pre-Translation](./images/pretranslate.gif)
 
 ### Duplicate Detection
 
-![Duplicate Detection](images/duplicates.png)
+![Duplicate Detection](./images/duplicates.png)
 
 ---
 
