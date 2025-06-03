@@ -1,71 +1,118 @@
-# xlf-editor README
+# XLF Editor
 
-This is the README for your extension "xlf-editor". After writing up a brief description, we recommend including the following sections.
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+**XLF Editor** is a powerful Visual Studio Code extension for editing, translating, and managing XLF translation files, especially for Business Central projects. It provides a modern, user-friendly interface for translators and developers, with productivity features like pre-translation, duplicate detection, and reference management.
 
 ---
 
-## Following extension guidelines
+## Features
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+- **Custom Editor for XLF Files:**  
+  Open `.xlf` files in a dedicated, interactive editor with side-by-side source and translation columns.
+- **Pre-Translation:**  
+  Automatically fill in translations using stored references or similar strings.
+- **Duplicate Detection:**  
+  Instantly find and highlight source texts with different translations.
+- **Reference Management:**  
+  Import, clear, and view stored translations for reuse across projects.
+- **Batch Operations:**  
+  Clear all translations or pre-translate entire files with a single click.
+- **Advanced Filtering & Search:**  
+  Filter by untranslated, translated, or duplicate entries and search within source or translation texts.
+- **VS Code Integration:**  
+  Leverages the [Custom Editor API](https://code.visualstudio.com/api/extension-guides/custom-editors) for a seamless experience.
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+---
 
-## Working with Markdown
+## Screenshots
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+### Main Editor View
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+![Main Editor View](images/editor-view.png)
 
-## For more information
+### Show Translation Storage
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+![Translation Storage](images/translation-storage.png)
 
-**Enjoy!**
+### Pre-Translation in Action
+
+![Pre-Translation](images/pretranslate.gif)
+
+### Duplicate Detection
+
+![Duplicate Detection](images/duplicates.png)
+
+---
+
+## Getting Started
+
+1. **Install the Extension:**  
+   Search for `XLF Editor` in the VS Code Marketplace or install from [here](https://marketplace.visualstudio.com/).
+
+2. **Open an XLF File:**  
+   Right-click any `.xlf` file and select **Open With > XLF Translator**.
+
+3. **Use the Command Palette:**  
+   - `XLF Editor: Open XLF File`
+   - `XLF Editor: Import XLF File`
+   - `XLF Editor: Clear imported XLF File`
+   - `XLF Editor: Show Stored Translations`
+   - `XLF Editor: Pre-translate XLF File`
+
+   > See [extension.ts](src/extension.ts) for command implementations.
+
+---
+
+## Extension Settings
+
+This extension contributes the following settings:
+
+- `xlfEditor.pretranslateMinPercent`  
+  *Type:* `number` (default: `100`)  
+  Minimum percent match for pre-translation to apply.
+
+- `xlfEditor.preferredTranslationSource`  
+  *Type:* `string` (default: `ask`)  
+  Preferred source for translations when multiple matches are found.  
+  Options: `storage`, `file`, `ask`
+
+See [`package.json`](package.json) for the full configuration schema.
+
+---
+
+## Requirements
+
+- Visual Studio Code `^1.97.0`
+- Node.js `>=18.18.0` (for development/build)
+- No additional dependencies required for end users.
+
+---
+
+## Known Issues
+
+- Only XLIFF 1.2 files are supported.
+- Large files may take longer to process during pre-translation.
+- See [issues](https://github.com/DaJan404/xlfeditor/issues) for the latest updates.
+
+---
+
+## Release Notes
+
+See [`CHANGELOG.md`](CHANGELOG.md) for detailed release history.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please see the [VS Code Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines) and open issues or pull requests on [GitHub](https://github.com/DaJan404/xlfeditor).
+
+---
+
+## Resources
+
+- [VS Code Custom Editors](https://code.visualstudio.com/api/extension-guides/custom-editors)
+- [VS Code Extension API](https://code.visualstudio.com/api)
+- [XLIFF 1.2 Specification](https://docs.oasis-open.org/xliff/v1.2/os/xliff-core.html)
+
+---
+
+**Enjoy translating with XLF Editor!**
