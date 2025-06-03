@@ -27,19 +27,19 @@
 
 ### Main Editor View
 
-![Main Editor View](images/editor-view.png)
+![Main Editor View](xlf-editor/images/editor-view.png)
 
 ### Show Translation Storage
 
-![Translation Storage](images/translation-storage.png)
+![Translation Storage](xlf-editor/images/translation-storage.png)
 
 ### Pre-Translation in Action
 
-![Pre-Translation](images/pretranslate.gif)
+![Pre-Translation](xlf-editor/images/pretranslate.gif)
 
 ### Duplicate Detection
 
-![Duplicate Detection](images/duplicates.png)
+![Duplicate Detection](xlf-editor/images/duplicates.png)
 
 ---
 
@@ -58,7 +58,7 @@
    - `XLF Editor: Show Stored Translations`
    - `XLF Editor: Pre-translate XLF File`
 
-   > See [extension.ts](src/extension.ts) for command implementations.
+   > See [extension.ts](xlf-editor/src/extension.ts) for command implementations.
 
 ---
 
@@ -75,7 +75,7 @@ This extension contributes the following settings:
   Preferred source for translations when multiple matches are found.  
   Options: `storage`, `file`, `ask`
 
-See [`package.json`](package.json) for the full configuration schema.
+See [`package.json`](xlf-editor/package.json) for the full configuration schema.
 
 ---
 
@@ -97,7 +97,7 @@ See [`package.json`](package.json) for the full configuration schema.
 
 ## Release Notes
 
-See [`CHANGELOG.md`](CHANGELOG.md) for detailed release history.
+See [`CHANGELOG.md`](xlf-editor/CHANGELOG.md) for detailed release history.
 
 ---
 
