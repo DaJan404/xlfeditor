@@ -38,23 +38,31 @@ jobs:
         cache: 'npm'
     
     - name: Install dependencies
-      run: npm ci
+      run: |
+        cd xlf-editor
+        npm ci
       
     - name: Lint
-      run: npm run lint
+      run: |
+        cd xlf-editor
+        npm run lint
       
     - name: Compile
-      run: npm run compile
+      run: |
+        cd xlf-editor
+        npm run compile
 
     - name: Setup Git
       if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
       run: |
+        cd xlf-editor
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
     - name: Auto-Increment Version and Package Extension
       if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
       run: |
+        cd xlf-editor
         npm install -g @vscode/vsce
         vsce package
         echo "NEW_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
@@ -67,7 +75,7 @@ jobs:
       with:
         tag_name: v${{ env.NEW_VERSION }}
         name: Release v${{ env.NEW_VERSION }}
-        files: "*.vsix"
+        files: "xlf-editor/*.vsix"
         draft: false
         prerelease: false
         generate_release_notes: true
