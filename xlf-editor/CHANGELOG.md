@@ -16,7 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.0.1] - 2024-06-03
+## [1.0.0] - 2025-06-03
+
+### Added
+- Updated Changelog.md
+- Updated Readme.md
+
+## [0.0.1] - 2025-06-03
 
 ### Added
 - Initial release of **XLF Editor** for Visual Studio Code.
@@ -32,5 +38,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/DaJan404/xlfeditor/compare/v0.0.1...HEAD
+[1.0.0]: https://github.com/DaJan404/xlfeditor/releases/tag/v1.0.0
 [0.0.1]: https://github.com/DaJan404/xlfeditor/releases/tag/v0.0.1
