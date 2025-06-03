@@ -60,6 +60,12 @@ jobs:
         git config --global user.name 'GitHub Actions'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
+    - name: Bump Version
+      if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
+      run: |
+        cd xlf-editor
+        npm version ${{ github.event.inputs.version_type }} --no-git-tag-version
+
     - name: Auto-Increment Version and Package Extension
       if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
       run: |
