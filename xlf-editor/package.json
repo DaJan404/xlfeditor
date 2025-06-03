@@ -3,6 +3,11 @@
   "displayName": "XLF Editor",
   "description": "Editor for XLF translation files in Business Central",
   "version": "0.0.1",
+  "publisher": "DaJan404",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DaJan404/xlfeditor"
+  },
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -82,8 +87,11 @@
     "pretest": "npm run compile",
     "lint": "eslint src --ext ts",
     "test": "vscode-test",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "package": "npm run compile && vsce package",
+    "publish:patch": "npm run compile && vsce publish patch",
+    "publish:minor": "npm run compile && vsce publish minor",
+    "publish:major": "npm run compile && vsce publish major",
+    "publish": "npm run compile && vsce publish"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -95,7 +103,8 @@
     "@vscode/test-cli": "^0.0.10",
     "@vscode/test-electron": "^2.4.1",
     "eslint": "^9.19.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "@vscode/vsce": "^2.24.0"
   },
   "dependencies": {
     "xml2js": "^0.6.2"

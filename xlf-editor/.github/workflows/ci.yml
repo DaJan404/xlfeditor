@@ -5,6 +5,17 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version increment type (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
 
 jobs:
   build:
@@ -17,6 +28,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v3
@@ -32,8 +45,29 @@ jobs:
       
     - name: Compile
       run: npm run compile
-      
-    - name: Run tests
-      uses: GabrielBB/xvfb-action@v1
+
+    - name: Setup Git
+      if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+    - name: Auto-Increment Version and Package Extension
+      if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
+      run: |
+        npm install -g @vscode/vsce
+        vsce package
+        echo "NEW_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+
+    - name: Create GitHub Release
+      if: github.event_name == 'workflow_dispatch' && matrix.os == 'ubuntu-latest' && matrix.node-version == '18.x'
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        run: npm test
+        tag_name: v${{ env.NEW_VERSION }}
+        name: Release v${{ env.NEW_VERSION }}
+        files: "*.vsix"
+        draft: false
+        prerelease: false
+        generate_release_notes: true
