@@ -61,7 +61,7 @@ export class XlfEditorProvider implements vscode.CustomTextEditorProvider {
                 case 'update':
                     if (Array.isArray(e.changes)) {
                         await this.xliffController.handleTranslationUpdate(document, e.changes);
-                        webviewPanel.dispose();
+                        // webviewPanel.dispose();
                     }
                     break;
                     

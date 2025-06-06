@@ -262,7 +262,6 @@ export class WebView {
                 </div>
                 <button id="clearButton" class="save-button">Clear All</button>
                 <button id="pretranslateButton" class="save-button">Pre-translate</button>
-                <button id="saveButton" class="save-button" disabled>Save Changes</button>
             </div>
             <div class="filter-bar">
                 <div class="filter-group">
@@ -295,6 +294,7 @@ export class WebView {
                 let hasUnsavedChanges = false;
                 let currentData = null;
                 const state = vscode.getState() || { scrollPosition: 0 };
+                const pendingChanges = new Map();
 
                 function updateSaveState(state) {
                     hasUnsavedChanges = state;
@@ -452,16 +452,37 @@ export class WebView {
                         // Initial resize
                         autoResizeTextarea(textarea);
                         
-                        // Resize on input
+                        // Store changes without saving on input
                         textarea.addEventListener('input', e => {
                             const target = e.target;
+                            const id = target.dataset.id;
+                            const value = target.value.trim();
+                            
+                            // Store change
+                            pendingChanges.set(id, value);
+                            
+                            // Auto-resize
                             autoResizeTextarea(target);
-                            updateSaveState(true);
                         });
 
-                        // Resize on keydown (for Enter key)
-                        textarea.addEventListener('keydown', e => {
-                            setTimeout(() => autoResizeTextarea(e.target), 0);
+                        // Save only when leaving textarea
+                        textarea.addEventListener('blur', () => {
+                            const changes = [];
+                            currentData.transUnits.forEach(unit => {
+                                changes.push({
+                                    id: unit.id,
+                                    value: pendingChanges.has(unit.id) ? 
+                                        pendingChanges.get(unit.id) : 
+                                        (unit.target || '').trim()
+                                });
+                            });
+
+                            vscode.postMessage({
+                                type: 'update',
+                                changes: changes
+                            });
+
+                            pendingChanges.clear();
                         });
                     });
 
@@ -495,26 +516,6 @@ export class WebView {
                             updateSaveState(true);
                             dropdown.classList.add('hidden');
                         });
-                    });
-                }
-
-                if (!document.getElementById('saveButton').hasListener) {
-                    document.getElementById('saveButton').hasListener = true;
-                    document.getElementById('saveButton').addEventListener('click', () => {
-                        const changes = [];
-                        document.querySelectorAll('#translationRows tr:not(.hidden) textarea').forEach(textarea => {
-                            changes.push({
-                                id: textarea.dataset.id,
-                                value: textarea.value.trim()
-                            });
-                        });
-
-                        vscode.postMessage({
-                            type: 'update',
-                            changes: changes
-                        });
-
-                        updateSaveState(false);
                     });
                 }
 

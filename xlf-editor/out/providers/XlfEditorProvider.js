@@ -84,7 +84,7 @@ class XlfEditorProvider {
                 case 'update':
                     if (Array.isArray(e.changes)) {
                         await this.xliffController.handleTranslationUpdate(document, e.changes);
-                        webviewPanel.dispose();
+                        // webviewPanel.dispose();
                     }
                     break;
                 case 'pretranslate':
