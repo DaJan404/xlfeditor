@@ -311,8 +311,19 @@ export class WebView {
                     switch (message.type) {
                         case 'update':
                             updateContent(message.content);
-                            // Enable save button if the update comes from pre-translate
                             if (message.enableSave) {
+                                // Save all translations after pre-translate
+                                const changes = [];
+                                message.content.transUnits.forEach(unit => {
+                                    changes.push({
+                                        id: unit.id,
+                                        value: unit.target || ''
+                                    });
+                                });
+                                vscode.postMessage({
+                                    type: 'update',
+                                    changes: changes
+                                });
                                 updateSaveState(true);
                             }
                             break;
@@ -566,6 +577,28 @@ export class WebView {
                     textarea.style.height = (textarea.scrollHeight) + 'px';
                 }
 
+                // Update the normalizeText function
+                function normalizeText(text) {
+                    if (!text) return '';
+                    return text
+                        .toLowerCase()
+                        .replace(/[\s\.\,\:\;\-\_]/g, '') // remove whitespace and common punctuation
+                        .replace(/nr|no|nummer/g, 'nr')   // treat "nr", "no", "nummer" as the same
+                        .normalize('NFKC');               // Unicode normalization
+                }
+
+                function normalizeTranslation(text) {
+                    if (!text) return '';
+                    return text
+                        .toLowerCase()
+                        .replace(/[\.\,\:\;\-\_]/g, ' ')         // replace punctuation with space
+                        .replace(/\b(no|nr|nummer)\b/g, 'nr')   // normalize "no", "nr", "nummer" to "nr"
+                        .replace(/\bartikelnr\b/g, 'artikel nr')// normalize "artikelnr" to "artikel nr"
+                        .replace(/\s+/g, ' ')                   // collapse multiple spaces
+                        .trim()
+                        .normalize('NFKC');
+                }
+
                 function filterTranslations() {
                     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
                     const filterType = document.getElementById('filterType').value;
@@ -576,28 +609,30 @@ export class WebView {
                     const sourceMap = new Map();
                     if (filterType === 'duplicates') {
                         rows.forEach(row => {
-                            const sourceText = row.querySelector('.source-text').textContent.toLowerCase();
+                            const sourceText = row.querySelector('.source-text').textContent;
                             const translationText = row.querySelector('textarea').value.trim();
+                            const normTranslation = normalizeTranslation(translationText);
                             if (translationText) {
                                 if (!sourceMap.has(sourceText)) {
                                     sourceMap.set(sourceText, new Set());
                                 }
-                                sourceMap.get(sourceText).add(translationText);
+                                sourceMap.get(sourceText).add(normTranslation);
                             }
                         });
                     }
 
                     rows.forEach(row => {
-                        const sourceText = row.querySelector('.source-text').textContent.toLowerCase();
-                        const translationText = row.querySelector('textarea').value.toLowerCase();
+                        const sourceText = row.querySelector('.source-text').textContent;
+                        const translationText = row.querySelector('textarea').value;
+                        const normTranslation = normalizeTranslation(translationText);
                         const isTranslated = translationText.trim().length > 0;
 
                         let show = true;
 
                         // Filter by search term
                         if (searchTerm) {
-                            show = sourceText.includes(searchTerm) || 
-                                translationText.includes(searchTerm);
+                            show = sourceText.toLowerCase().includes(searchTerm) ||
+                                translationText.toLowerCase().includes(searchTerm);
                         }
 
                         // Filter by type
@@ -610,11 +645,9 @@ export class WebView {
                                     show = isTranslated;
                                     break;
                                 case 'duplicates':
-                                    // Show only if source text has multiple different translations
-                                    show = sourceMap.has(sourceText) && 
-                                           sourceMap.get(sourceText).size > 1 &&
-                                           isTranslated;
-                                    // Highlight rows with same source
+                                    show = sourceMap.has(sourceText) &&
+                                        sourceMap.get(sourceText).size > 1 &&
+                                        isTranslated;
                                     if (show) {
                                         row.style.backgroundColor = 'var(--vscode-editorWarning-background)';
                                     } else {
@@ -637,7 +670,7 @@ export class WebView {
                             matchedRows.push(row);
                         }
                     });
-                    
+
                     currentMatchIndex = matchedRows.length > 0 ? 0 : -1;
                     updateNavigationButtons();
 
@@ -657,7 +690,24 @@ export class WebView {
     }
 
     public initialize(webviewPanel: vscode.WebviewPanel): void {
-        webviewPanel.webview.options = { enableScripts: true };
-        webviewPanel.webview.html = this.getWebviewContent();
+        try {
+            // Configure security options for webview
+            webviewPanel.webview.options = {
+                enableScripts: true,
+                enableCommandUris: true,
+                localResourceRoots: []
+            };
+
+            // Get and sanitize content
+            const content = this.getWebviewContent().trim();
+            
+            // Set the HTML content
+            webviewPanel.webview.html = content;
+
+            console.log('Webview initialized with content');
+        } catch (error) {
+            console.error('Error initializing webview:', error);
+            throw error;
+        }
     }
 }
