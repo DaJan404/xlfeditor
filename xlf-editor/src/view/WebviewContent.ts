@@ -602,7 +602,8 @@ export class WebView {
                 function filterTranslations() {
                     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
                     const filterType = document.getElementById('filterType').value;
-                    const rows = document.querySelectorAll('#translationRows tr');
+                    const tbody = document.getElementById('translationRows');
+                    const rows = Array.from(document.querySelectorAll('#translationRows tr'));
                     let visibleCount = 0;
 
                     // Create map for duplicate detection
@@ -621,7 +622,31 @@ export class WebView {
                         });
                     }
 
-                    rows.forEach(row => {
+                    // --- Grouping logic for duplicates ---
+                    let groupedRows = rows;
+                    if (filterType === 'duplicates') {
+                        // Find all source texts that have >1 unique translation
+                        const duplicateSources = Array.from(sourceMap.entries())
+                            .filter(([_, translations]) => translations.size > 1)
+                            .map(([sourceText]) => sourceText);
+
+                        // Sort rows so that all rows with the same duplicate sourceText are together
+                        groupedRows = rows.slice().sort((a, b) => {
+                            const aSource = a.querySelector('.source-text').textContent;
+                            const bSource = b.querySelector('.source-text').textContent;
+                            const aIsDup = duplicateSources.includes(aSource) ? 0 : 1;
+                            const bIsDup = duplicateSources.includes(bSource) ? 0 : 1;
+                            if (aIsDup !== bIsDup) return aIsDup - bIsDup;
+                            if (aSource < bSource) return -1;
+                            if (aSource > bSource) return 1;
+                            return 0;
+                        });
+
+                        // Re-append sorted rows to tbody
+                        groupedRows.forEach(row => tbody.appendChild(row));
+                    }
+
+                    groupedRows.forEach(row => {
                         const sourceText = row.querySelector('.source-text').textContent;
                         const translationText = row.querySelector('textarea').value;
                         const normTranslation = normalizeTranslation(translationText);
