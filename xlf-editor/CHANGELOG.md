@@ -51,6 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration with VS Code [Custom Editor API](https://code.visualstudio.com/api/extension-guides/custom-editors).
 
 ---
-
+[1.1.0]: https://github.com/DaJan404/xlfeditor/releases/tag/v1.1.0
 [1.0.0]: https://github.com/DaJan404/xlfeditor/releases/tag/v1.0.0
 [0.0.1]: https://github.com/DaJan404/xlfeditor/releases/tag/v0.0.1
