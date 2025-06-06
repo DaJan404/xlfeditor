@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.4]
+
+### Fixed
+- Improved filtering logic in the search bar to provide more accurate and expected results.
+
+### Changed
+- Optimized the pre-translation process for better performance and reliability.
+
+### Enhanced
+- **Grouped Duplicates in "Different Translations" View:**  
+  When displaying source texts with multiple different translations, the duplicates list now sorts and groups all translations for the same source text together.  
+  **Description:**  
+  Previously, translations for the same source text could appear scattered throughout the list, making it difficult to compare and manage duplicates. Now, all entries for a given source text are shown consecutively, providing a clearer overview and making it much easier to resolve duplicate translations.
+
 ## [1.0.0] - 2025-06-03
 
 ### Added
