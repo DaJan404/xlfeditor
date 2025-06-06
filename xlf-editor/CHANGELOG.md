@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.0.4]
+## [1.1.0]
 
 ### Fixed
 - Improved filtering logic in the search bar to provide more accurate and expected results.
