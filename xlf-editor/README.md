@@ -48,8 +48,10 @@
 1. **Install the Extension:**  
    Search for `XLF Editor` in the VS Code Marketplace or install from [here](https://marketplace.visualstudio.com/).
 
-2. **Open an XLF File:**  
-   Right-click any `.xlf` file and select **Open With > XLF Translator**.
+2. **Open an XLF File:**
+   The extension does not automatically replace the default text editor. Right-click
+   any `.xlf` file and select **Open With > XLF Translator** or run the command
+   **"XLF Editor: Open XLF File"** from the palette.
 
 3. **Use the Command Palette:**  
    - `XLF Editor: Open XLF File`
