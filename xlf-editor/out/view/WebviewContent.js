@@ -296,10 +296,13 @@ class WebView {
 
                 function updateSaveState(state) {
                     hasUnsavedChanges = state;
-                    document.getElementById('saveButton').disabled = !state;
-                    vscode.postMessage({ 
-                        type: 'saveState', 
-                        hasUnsavedChanges: state 
+                    const saveButton = document.getElementById('saveButton');
+                    if (saveButton) {
+                        saveButton.disabled = !state;
+                    }
+                    vscode.postMessage({
+                        type: 'saveState',
+                        hasUnsavedChanges: state
                     });
                 }
 
